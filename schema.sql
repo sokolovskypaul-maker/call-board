@@ -36,33 +36,34 @@ create or replace function public.is_admin() returns boolean
   language sql stable security definer set search_path = public
   as $$ select exists (select 1 from public.members where user_id = auth.uid() and role = 'admin'); $$;
 
+-- Table privileges: only signed-in users reach the tables at all (anonymous visitors get nothing); the policies below narrow it per row.
+-- Needed when the project is created with "Automatically expose new tables" off.
+revoke all on public.members, public.leads, public.calls, public.config from anon;
+grant select on public.members to authenticated;
+grant select, insert, update, delete on public.leads, public.config to authenticated;
+grant select, insert, update on public.calls to authenticated;
+revoke execute on function public.is_member(), public.is_admin() from public, anon;
+grant execute on function public.is_member(), public.is_admin() to authenticated;
+
 alter table public.members enable row level security;
 alter table public.leads   enable row level security;
 alter table public.calls   enable row level security;
 alter table public.config  enable row level security;
 
 -- members: each person sees their own row; admins see everyone. Changes only through the SQL editor.
-drop policy if exists members_read on public.members;
 create policy members_read on public.members for select to authenticated
   using (user_id = auth.uid() or public.is_admin());
 
 -- leads and config: members read, admins write.
-drop policy if exists leads_read on public.leads;
 create policy leads_read on public.leads for select to authenticated using (public.is_member());
-drop policy if exists leads_write on public.leads;
 create policy leads_write on public.leads for all to authenticated using (public.is_admin()) with check (public.is_admin());
 
-drop policy if exists config_read on public.config;
 create policy config_read on public.config for select to authenticated using (public.is_member());
-drop policy if exists config_write on public.config;
 create policy config_write on public.config for all to authenticated using (public.is_admin()) with check (public.is_admin());
 
 -- calls: members read and write call records; nobody deletes from the app.
-drop policy if exists calls_read on public.calls;
 create policy calls_read on public.calls for select to authenticated using (public.is_member());
-drop policy if exists calls_insert on public.calls;
 create policy calls_insert on public.calls for insert to authenticated with check (public.is_member());
-drop policy if exists calls_update on public.calls;
 create policy calls_update on public.calls for update to authenticated using (public.is_member()) with check (public.is_member());
 
 -- Live updates for call records.
