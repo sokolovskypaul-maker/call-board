@@ -256,6 +256,7 @@ function renderDetail(){
     : `<span class="dialrow"><a class="call ${i ? "alt" : ""}" href="${telOf(p)}" aria-label="חיוג ל-${esc(p)}">${esc(p)}</a><button type="button" class="btn sm copy" data-ph="${esc(p)}">העתק</button>${lbl ? `<span class="lbl">${lbl}</span>` : ""}</span>`).join("");
   const phoneNotes = (l.noDial ? `<div class="watch"><b>לא לחייג.</b> ${esc(l.noDialReason || "עד שנמצא מספר אמיתי.")}</div>` : "")
     + (l.phoneMismatch ? `<div class="watch"><b>המספר באתר של העסק שונה מהמספר הרשום בגוגל.</b> להתקשר קודם למספר מהאתר (נבדק ${esc(l.phoneCheckDate || "")}).</div>` : "")
+    + (l.phoneCheckNote ? `<div class="note">${esc(l.phoneCheckNote)}</div>` : "")
     + (l.virtual07 ? `<div class="note">המספר הרשום הוא קו 07 וירטואלי. לרוב הוא מגיע למוקד או להפניה, ולא לבעל העסק, ולכן הליד בסוף התור.</div>` : "");
   const trs = (r.calls || []).filter(x => x.tr).slice(-6).reverse();
   const links = [l.website && `<a href="${esc(l.website)}" target="_blank" rel="noopener noreferrer">אתר העסק</a>`, l.maps && `<a href="${esc(l.maps)}" target="_blank" rel="noopener noreferrer">גוגל מפס</a>`,
