@@ -198,9 +198,9 @@ function renderList(){
   $("#list").innerHTML = items.length ? items.map(l => { const r = rec(l.id);
     const badge = l.src === "g" ? `<span class="sc s${l.score}" title="ציון התאמה ${l.score}">${l.score}</span>` : `<span class="sc fb" title="פייסבוק">FB</span>`;
     const when = isDue(r) ? ` · <span class="due">לחזור עכשיו</span>` : (["callback", "booked", "demo"].includes(r.status) && r.callback ? ` · ${fmtDT(r.callback)}` : "");
-    const flags = (l.tags || []).map(t => ` <span class="tag">${esc(t)}${l.priority ? " · " + l.priority : ""}</span>`).join("")
-      + (l.noDial ? ` · <span class="flag">לא לחייג</span>` : "") + (l.phoneMismatch ? ` · <span class="flag">מספר מהאתר</span>` : "") + (l.virtual07 ? ` · <span class="flag dim">07</span>` : "");
-    return `<button type="button" role="listitem" class="row ${l.id === selId ? "sel" : ""}" data-id="${esc(l.id)}">${badge}<span style="min-width:0"><span class="nm">${esc(l.name)}</span><span class="sub">${esc(l.niche)}${l.brief?.owner ? " · " + esc(l.brief.owner) : ""} · ${esc(l.area || "אזור לא ידוע")}${flags}${when}</span></span><span class="pill st-${r.status}">${SLABEL[r.status] || ""}${r.attempts ? ` ×${r.attempts}` : ""}</span></button>`;
+    const tagPills = (l.tags || []).map(t => `<span class="tag">${esc(t)}${l.priority ? " · " + l.priority : ""}</span> `).join("");
+    const flags = (l.noDial ? ` · <span class="flag">לא לחייג</span>` : "") + (l.phoneMismatch ? ` · <span class="flag">מספר מהאתר</span>` : "") + (l.virtual07 ? ` · <span class="flag dim">07</span>` : "");
+    return `<button type="button" role="listitem" class="row ${l.id === selId ? "sel" : ""}" data-id="${esc(l.id)}">${badge}<span style="min-width:0"><span class="nm">${esc(l.name)}</span><span class="sub">${tagPills}${esc(l.niche)}${l.brief?.owner ? " · " + esc(l.brief.owner) : ""} · ${esc(l.area || "אזור לא ידוע")}${flags}${when}</span></span><span class="pill st-${r.status}">${SLABEL[r.status] || ""}${r.attempts ? ` ×${r.attempts}` : ""}</span></button>`;
   }).join("") : (DATA.length ? `<div class="empty"><b>אין תוצאות</b>נסה לנקות את החיפוש או את הסינון.</div>` : "");
   renderStats();
 }
