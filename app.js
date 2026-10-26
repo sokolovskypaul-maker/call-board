@@ -269,6 +269,11 @@ function renderDetail(){
       ${li("שאלת כאב", b.pain)}${li("משפט מעבר (רק אם עלה כאב)", b.bridge)}
       ${b.obj ? `<div class="bk obj"><div class="k">ההתנגדות הצפויה</div><div><b>"${esc(b.obj)}"</b></div>${b.objReply ? `<div>${esc(b.objReply)}</div>` : ""}</div>` : ""}
       ${b.watch ? `<div class="watch"><b>לשים לב:</b> ${esc(b.watch)}</div>` : ""}</div></div>` : "";
+  const hc = l.hotCard;   // a day's call list card: opener detail, hook, likely objection, WhatsApp line
+  const hotBox = hc ? `<div class="brief hot"><h3><span>כרטיס ${esc((l.tags || [])[0] || "חם")}</span>${l.priority ? `<span>מקום ${l.priority} בתור</span>` : ""}</h3><div class="in">
+      ${li("פרט מהאתר לפתיחה", hc.detail)}${hc.hook ? `<p class="opener">"${esc(hc.hook)}"</p>` : ""}
+      ${hc.obj ? `<div class="bk obj"><div class="k">ההתנגדות הצפויה, והתשובה מהתסריט</div><div><b>"${esc(hc.obj)}"</b></div><div>${esc(hc.ans || "")}</div></div>` : ""}
+      ${hc.wa ? `<div class="bk"><div class="k">לוואטסאפ, רק אחרי "כן" בשיחה${hc.general ? " · דמו כללי" : ""}</div><div class="inline"><span class="wa">${esc(hc.wa)}</span><button type="button" class="btn sm copy" data-ph="${esc(hc.wa)}">העתק</button></div></div>` : ""}</div></div>` : "";
   const form = FORM.map(([k, label, type, opts]) => { const v = sm[k] ?? (k === "price" ? (PRICE[l.track] || "") : "");
     if (type === "radio") return `<div class="f"><span>${label}</span><span class="radios" role="radiogroup" aria-label="${label}">${opts.map((o, i) => `<label for="f-${k}-${i}"><input type="radio" id="f-${k}-${i}" name="f-${k}" value="${esc(o)}" ${v === o ? "checked" : ""}> ${esc(o)}</label>`).join("")}</span></div>`;
     if (type === "area") return `<label class="f" for="f-${k}">${label}<textarea id="f-${k}" data-f="${k}">${esc(v)}</textarea></label>`;
@@ -279,7 +284,7 @@ function renderDetail(){
     <div class="head"><div class="whois"><h2>${esc(l.name)}</h2>${(l.tags || []).length ? `<div class="tags">${l.tags.map(t => `<span class="tag">${esc(t)}${l.priority ? " · מקום " + l.priority + " בתור" : ""}</span>`).join("")}</div>` : ""}<div class="meta">${meta}</div><div class="meta">${esc(l.area || "אזור לא ידוע")}</div><div class="links">${links}</div></div><div class="dial">${dial || '<span class="meta">אין טלפון</span>'}</div></div>
     ${phoneNotes ? `<div class="phonenotes">${phoneNotes}</div>` : ""}
     ${liveHtml(l)}
-    ${brief}${objPanel(l)}
+    ${hotBox}${brief}${objPanel(l)}
     ${l.fit ? `<div class="fit"><b>למה מתאים לאלה:</b> ${esc(l.fit)}</div>` : ""}
     <div class="facts">${kv("מה העסק עושה", l.what)}${kv("ביקור מדידה חינם", l.free)}${kv("הבטחת זמן תגובה", l.resp)}${kv("וואטסאפ באתר", l.wa)}${kv("טופס באתר", l.form)}${kv("בעלים מפעיל", l.owner)}${kv("טלפון נוסף באתר", l.sitePhone)}${kv("הערות מהאיסוף", l.notes)}</div>
     <section class="box"><h3>סטטוס</h3>
