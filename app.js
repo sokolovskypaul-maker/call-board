@@ -68,10 +68,11 @@ const fmtDT = s => { if (!s) return ""; const d = new Date(s); return isNaN(d) ?
 function setSync(kind, text){ $("#sync").className = "sync " + kind; $("#syncText").textContent = text; }
 function telOf(p){ let d = String(p).replace(/\D/g, ""); if (!d) return ""; if (d.startsWith("1800")) return "tel:" + d; if (d.startsWith("972")) d = d.slice(3); else if (d.startsWith("0")) d = d.slice(1); return "tel:+972" + d; }
 const phonesOf = l => String(l.phone || "").split(/,\s*/).map(s => s.trim()).filter(Boolean);
-// Numbers to dial, in order. When the business website shows other numbers than the listed one, those come first.
+// Numbers to dial, in order. The number on the business website always comes before the one listed on Google.
 function dialList(l){
-  const listed = phonesOf(l).map(p => [p, l.phoneMismatch ? "רשום בגוגל" : ""]);
-  const all = l.phoneMismatch ? [...(l.webPhones || []).map(p => [p, "מספר מהאתר"]), ...listed] : listed;
+  const web = l.webPhones || [];
+  const listed = phonesOf(l).map(p => [p, web.length ? "רשום בגוגל" : ""]);
+  const all = [...web.map(p => [p, "מספר מהאתר"]), ...listed];
   const seen = new Set(); return all.filter(([p]) => { const d = p.replace(/\D/g, ""); return d && !seen.has(d) && seen.add(d); });
 }
 const isDue = r => r.status === "callback" && r.callback && new Date(r.callback) <= new Date();
