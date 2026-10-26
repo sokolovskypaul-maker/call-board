@@ -70,3 +70,20 @@ create policy calls_update on public.calls for update to authenticated using (pu
 do $$ begin
   alter publication supabase_realtime add table public.calls;
 exception when duplicate_object then null; end $$;
+
+-- Call transcripts (added 2026-10-26): one row per call, written during the call and at its end.
+-- The lead's call log (calls.rec.calls[].tr) points to the row. Members read and write; nobody deletes from the app.
+create table if not exists public.transcripts (
+  id         text primary key,
+  lead_id    text not null references public.leads (id) on delete cascade,
+  data       jsonb not null,
+  updated_at timestamptz not null default now(),
+  updated_by uuid references auth.users
+);
+revoke all on public.transcripts from anon;
+grant select, insert, update on public.transcripts to authenticated;
+alter table public.transcripts enable row level security;
+create policy transcripts_read on public.transcripts for select to authenticated using (public.is_member());
+create policy transcripts_insert on public.transcripts for insert to authenticated with check (public.is_member());
+create policy transcripts_update on public.transcripts for update to authenticated using (public.is_member()) with check (public.is_member());
+create index if not exists transcripts_lead_idx on public.transcripts (lead_id);

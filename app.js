@@ -52,9 +52,11 @@ const OBJ = [
 // ---------- state ----------
 let DATA = [], SCRIPTS = {discovery: "", sales: ""}, user = null, isAdmin = false, selId = null, channel = null, readOnly = false;
 const byId = {}, timers = new Map(), chains = new Map();
-let call = null;           // {id, start, stages:Set, objections:Set, timer}
+let call = null;           // {id, start, end, stages:Set, objections:Set, timer, trId, trTimer, trChain, indexed}
 let live = null;           // {rec, listening, lines:[], interim, lastHit:{}}
 let pendingFill = null;
+const fillText = {};       // lead id -> text in the "summary with Claude" box (survives re-renders)
+const trCache = {};        // transcript id -> loaded transcript
 const blank = () => ({status: "new", attempts: 0, notes: "", callback: "", summary: {}, history: []});
 const rec = id => byId[id] || blank();
 const trackKind = l => l.track === "ראשית" ? "discovery" : "sales";
@@ -66,6 +68,12 @@ const fmtDT = s => { if (!s) return ""; const d = new Date(s); return isNaN(d) ?
 function setSync(kind, text){ $("#sync").className = "sync " + kind; $("#syncText").textContent = text; }
 function telOf(p){ let d = String(p).replace(/\D/g, ""); if (!d) return ""; if (d.startsWith("1800")) return "tel:" + d; if (d.startsWith("972")) d = d.slice(3); else if (d.startsWith("0")) d = d.slice(1); return "tel:+972" + d; }
 const phonesOf = l => String(l.phone || "").split(/,\s*/).map(s => s.trim()).filter(Boolean);
+// Numbers to dial, in order. When the business website shows other numbers than the listed one, those come first.
+function dialList(l){
+  const listed = phonesOf(l).map(p => [p, l.phoneMismatch ? "רשום בגוגל" : ""]);
+  const all = l.phoneMismatch ? [...(l.webPhones || []).map(p => [p, "מספר מהאתר"]), ...listed] : listed;
+  const seen = new Set(); return all.filter(([p]) => { const d = p.replace(/\D/g, ""); return d && !seen.has(d) && seen.add(d); });
+}
 const isDue = r => r.status === "callback" && r.callback && new Date(r.callback) <= new Date();
 
 // ---------- auth ----------
@@ -149,14 +157,16 @@ function buildFilters(){
   $("#fStatus").innerHTML = `<option value="">כל הסטטוסים</option>` + STATUSES.map(([k, v]) => `<option value="${k}">${v}</option>`).join("");
 }
 ["#q","#fSrc","#fNiche","#fScore","#fStatus","#sort"].forEach(s => $(s).addEventListener("input", renderList));
-function rankKey(l){ const r = rec(l.id); const st = {callback: isDue(r) ? 0 : 4, booked: 1, demo: 1, new: 2, noanswer: 3, done: 6, won: 7, notrelevant: 8, dnc: 9}[r.status] ?? 5; return [st, l.src === "g" ? 0 : 1, -(l.score || 0), r.attempts || 0, l.order || 0]; }
+function rankKey(l){ const r = rec(l.id); let st = {callback: isDue(r) ? 0 : 4, booked: 1, demo: 1, new: 2, noanswer: 3, done: 6, won: 7, notrelevant: 8, dnc: 9}[r.status] ?? 5;
+  if (l.virtual07 && (r.status === "new" || r.status === "noanswer")) st = 4.5;   // a virtual 07 line rarely reaches the owner: call these last
+  return [st, l.src === "g" ? 0 : 1, -(l.score || 0), r.attempts || 0, l.order || 0]; }
 function cmp(a, b){ for (let i = 0; i < a.length; i++){ if (a[i] < b[i]) return -1; if (a[i] > b[i]) return 1; } return 0; }
 function filtered(){
   const q = $("#q").value.trim().toLowerCase().replace(/-/g, ""), src = $("#fSrc").value, ni = $("#fNiche").value, ms = +$("#fScore").value, fs = $("#fStatus").value;
   const out = DATA.filter(l => { const r = rec(l.id);
     if (src && l.src !== src) return false; if (ni && l.niche !== ni) return false;
     if (ms && !(l.src === "g" && l.score >= ms)) return false; if (fs && r.status !== fs) return false;
-    if (q){ const hay = (l.name + " " + l.area + " " + l.phone + " " + l.niche + " " + (l.what || "") + " " + (l.brief?.owner || "")).toLowerCase().replace(/-/g, ""); if (!hay.includes(q)) return false; }
+    if (q){ const hay = (l.name + " " + l.area + " " + l.phone + " " + (l.webPhones || []).join(" ") + " " + l.niche + " " + (l.what || "") + " " + (l.brief?.owner || "")).toLowerCase().replace(/-/g, ""); if (!hay.includes(q)) return false; }
     return true; });
   const s = $("#sort").value;
   if (s === "next") out.sort((a, b) => cmp(rankKey(a), rankKey(b)));
@@ -186,7 +196,8 @@ function renderList(){
   $("#list").innerHTML = items.length ? items.map(l => { const r = rec(l.id);
     const badge = l.src === "g" ? `<span class="sc s${l.score}" title="ציון התאמה ${l.score}">${l.score}</span>` : `<span class="sc fb" title="פייסבוק">FB</span>`;
     const when = isDue(r) ? ` · <span class="due">לחזור עכשיו</span>` : (["callback", "booked", "demo"].includes(r.status) && r.callback ? ` · ${fmtDT(r.callback)}` : "");
-    return `<button type="button" role="listitem" class="row ${l.id === selId ? "sel" : ""}" data-id="${esc(l.id)}">${badge}<span style="min-width:0"><span class="nm">${esc(l.name)}</span><span class="sub">${esc(l.niche)}${l.brief?.owner ? " · " + esc(l.brief.owner) : ""} · ${esc(l.area || "אזור לא ידוע")}${when}</span></span><span class="pill st-${r.status}">${SLABEL[r.status] || ""}${r.attempts ? ` ×${r.attempts}` : ""}</span></button>`;
+    const flags = (l.phoneMismatch ? ` · <span class="flag">מספר מהאתר</span>` : "") + (l.virtual07 ? ` · <span class="flag dim">07</span>` : "");
+    return `<button type="button" role="listitem" class="row ${l.id === selId ? "sel" : ""}" data-id="${esc(l.id)}">${badge}<span style="min-width:0"><span class="nm">${esc(l.name)}</span><span class="sub">${esc(l.niche)}${l.brief?.owner ? " · " + esc(l.brief.owner) : ""} · ${esc(l.area || "אזור לא ידוע")}${flags}${when}</span></span><span class="pill st-${r.status}">${SLABEL[r.status] || ""}${r.attempts ? ` ×${r.attempts}` : ""}</span></button>`;
   }).join("") : (DATA.length ? `<div class="empty"><b>אין תוצאות</b>נסה לנקות את החיפוש או את הסינון.</div>` : "");
   renderStats();
 }
@@ -224,8 +235,9 @@ function liveHtml(l){
         <button type="button" class="btn sm" id="listenToggle">${listening ? "⏸ עצור הקשבה" : "🎙 הקשב"}</button>
         <span class="mic ${listening ? "on" : ""}" id="mic"><span class="dot"></span>${listening ? "מקשיב" : "לא מקשיב"}</span>`
       : `<button type="button" class="btn primary" id="callStart">🎙 התחל שיחה והקשב</button><button type="button" class="btn sm" id="callManual">▶ מצב שיחה בלי הקשבה</button>
-        <span class="note">האייפון על רמקול ליד המחשב, בחדר שקט. התמלול לא נשמר.</span>`}
+        <span class="note">האייפון על רמקול ליד המחשב, בחדר שקט. התמלול נשמר ביומן של העסק.</span>`}
     </div>
+    ${call && !on ? `<div class="inline"><span class="note">יש שיחה פתוחה עם ${esc(DATA.find(x => x.id === call.id)?.name || "")}. שיחה חדשה כאן תסגור ותשמור אותה.</span><button type="button" class="btn sm" id="callGoto">חזור אליה</button></div>` : ""}
     ${chips}
     <div id="liveObj"></div>
     ${on && live ? `<div class="transcript" id="liveTranscript" aria-live="polite"></div>` : ""}
@@ -235,7 +247,10 @@ function liveHtml(l){
 function renderDetail(){
   const l = DATA.find(x => x.id === selId); if (!l) return;
   const r = rec(l.id), sm = r.summary || {}, b = l.brief || {};
-  const dial = phonesOf(l).map((p, i) => `<span class="dialrow"><a class="call ${i ? "alt" : ""}" href="${telOf(p)}" aria-label="חיוג ל-${esc(p)}">${esc(p)}</a><button type="button" class="btn sm copy" data-ph="${esc(p)}">העתק</button></span>`).join("");
+  const dial = dialList(l).map(([p, lbl], i) => `<span class="dialrow"><a class="call ${i ? "alt" : ""}" href="${telOf(p)}" aria-label="חיוג ל-${esc(p)}">${esc(p)}</a><button type="button" class="btn sm copy" data-ph="${esc(p)}">העתק</button>${lbl ? `<span class="lbl">${lbl}</span>` : ""}</span>`).join("");
+  const phoneNotes = (l.phoneMismatch ? `<div class="watch"><b>המספר באתר של העסק שונה מהמספר הרשום בגוגל.</b> להתקשר קודם למספר מהאתר (נבדק ${esc(l.phoneCheckDate || "")}).</div>` : "")
+    + (l.virtual07 ? `<div class="note">המספר הרשום הוא קו 07 וירטואלי. לרוב הוא מגיע למוקד או להפניה, ולא לבעל העסק, ולכן הליד בסוף התור.</div>` : "");
+  const trs = (r.calls || []).filter(x => x.tr).slice(-6).reverse();
   const links = [l.website && `<a href="${esc(l.website)}" target="_blank" rel="noopener noreferrer">אתר העסק</a>`, l.maps && `<a href="${esc(l.maps)}" target="_blank" rel="noopener noreferrer">גוגל מפס</a>`,
     l.post && `<a href="${esc(l.post)}" target="_blank" rel="noopener noreferrer">הפוסט בפייסבוק</a>`, l.groupUrl && `<a href="${esc(l.groupUrl)}" target="_blank" rel="noopener noreferrer">הקבוצה: ${esc(l.group)}</a>`].filter(Boolean).join("");
   const meta = l.src === "g" ? `ציון התאמה ${esc(l.score)} · ${esc(l.niche)} (נישה ${esc(l.track)}) · ${l.rating ? `גוגל ${esc(l.rating)} מתוך ${esc(l.reviews)} ביקורות` : "בלי דירוג בגוגל"}` : `פייסבוק · נישה ${esc(l.track)} · פורסם ${esc(l.date)}`;
@@ -254,6 +269,7 @@ function renderDetail(){
   $("#detail").innerHTML = `
     <button type="button" class="btn sm back" id="back">→ חזרה לרשימה</button>
     <div class="head"><div class="whois"><h2>${esc(l.name)}</h2><div class="meta">${meta}</div><div class="meta">${esc(l.area || "אזור לא ידוע")}</div><div class="links">${links}</div></div><div class="dial">${dial || '<span class="meta">אין טלפון</span>'}</div></div>
+    ${phoneNotes ? `<div class="phonenotes">${phoneNotes}</div>` : ""}
     ${liveHtml(l)}
     ${brief}${objPanel(l)}
     ${l.fit ? `<div class="fit"><b>למה מתאים לאלה:</b> ${esc(l.fit)}</div>` : ""}
@@ -266,8 +282,9 @@ function renderDetail(){
       ${r.history.length ? `<ul class="hist">${r.history.slice(-6).reverse().map(h => `<li>${fmtDT(h.t)}: ${esc(SLABEL[h.s] || h.s)}</li>`).join("")}</ul>` : ""}
     </section>
     <section class="box" id="fillBox"><h3>סיכום עם Claude</h3>
-      <div class="note">אחרי השיחה: התמלול נכנס לכאן אוטומטית. לוחצים "העתק ל-Claude", מדביקים בצ'אט של Claude, ומעתיקים לכאן את התשובה. אתה מאשר לפני שזה נשמר. התמלול עצמו לא נשמר.</div>
-      <textarea id="f-transcript" placeholder="התמלול מהשיחה (או הדבק תמלול ידני)">${esc(live && !live.listening && live.lines.length ? transcriptText() : "")}</textarea>
+      <div class="note">אחרי השיחה התמלול נכנס לכאן לבד, ונשמר גם ב"תמלולי שיחות". לוחצים "העתק ל-Claude", מדביקים בצ'אט של Claude, ומעתיקים לכאן את התשובה. שום דבר לא נכנס לטופס לפני שאתה מאשר.</div>
+      ${trs.length ? `<div class="trlog"><div class="note">תמלולי שיחות</div>${trs.map(x => `<details class="trd" data-tr="${esc(x.tr)}"><summary>${fmtDT(x.at)} · ${call && call.trId === x.tr ? "בשיחה עכשיו" : x.dur ? fmt(x.dur * 1000) + " דקות" : "השיחה נקטעה"}</summary><div class="trbody">טוען…</div></details>`).join("")}</div>` : ""}
+      <textarea id="f-transcript" placeholder="התמלול מהשיחה (או הדבק תמלול ידני)">${esc(fillText[l.id] || "")}</textarea>
       <div class="inline"><button type="button" class="btn sm" id="copyPrompt">העתק ל-Claude</button><a class="btn sm" href="https://claude.ai/new" target="_blank" rel="noopener noreferrer">פתח את Claude</a><span class="note" id="fillMsg"></span></div>
       <textarea id="f-answer" placeholder="הדבק כאן את התשובה של Claude"></textarea>
       <div class="inline"><button type="button" class="btn sm" id="parseAnswer">מלא את הטופס מהתשובה</button></div>
@@ -288,6 +305,12 @@ $("#detail").addEventListener("click", async e => {
   if (t.closest("#callStart")){ startCall(true); return; }
   if (t.closest("#callManual")){ startCall(false); return; }
   if (t.closest("#callEnd")){ endCall(); return; }
+  if (t.closest("#callGoto") && call){ selId = call.id; renderList(); renderDetail(); return; }
+  const tf = t.closest("[data-trfill]");
+  if (tf && trCache[tf.dataset.trfill]){
+    fillText[selId] = trText(trCache[tf.dataset.trfill]); const ta = $("#f-transcript"); if (ta) ta.value = fillText[selId];
+    $("#fillBox")?.scrollIntoView({behavior: "smooth", block: "start"}); return;
+  }
   if (t.closest("#listenToggle")){ live && live.listening ? stopListening() : startListening(); renderDetail(); return; }
   const sc = t.closest("[data-stage]"); if (sc && call){ const n = sc.dataset.stage; call.stages.has(n) ? call.stages.delete(n) : call.stages.add(n); refreshChips(); return; }
   if (t.closest("#objClose")){ $("#liveObj").innerHTML = ""; return; }
@@ -301,7 +324,8 @@ $("#detail").addEventListener("click", async e => {
 });
 $("#detail").addEventListener("input", e => {
   const t = e.target; if (!selId) return;
-  if (t.id === "f-notes") edit(selId, r => { r.notes = t.value; }, 700);
+  if (t.id === "f-transcript") fillText[selId] = t.value;
+  else if (t.id === "f-notes") edit(selId, r => { r.notes = t.value; }, 700);
   else if (t.id === "f-callback"){ edit(selId, r => { r.callback = t.value; }); renderList(); }
   else if (t.dataset.f) edit(selId, r => { r.summary = {...(r.summary || {}), [t.dataset.f]: t.value}; }, 700);
   else if (t.type === "radio" && t.name.startsWith("f-")){ edit(selId, r => { r.summary = {...(r.summary || {}), [t.name.slice(2)]: t.value}; }); renderStats(); }
@@ -311,25 +335,84 @@ $("#detail").addEventListener("input", e => {
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
 function liveMsg(text){ const m = $("#liveMsg"); if (!m) return; m.textContent = text || ""; m.classList.toggle("hidden", !text); }
 function startCall(listen){
-  if (call) clearInterval(call.timer);
-  call = {id: selId, start: Date.now(), stages: new Set(), objections: new Set(), timer: setInterval(() => { const el = $("#callTime"); if (el && call) el.textContent = fmt(Date.now() - call.start); if (call && (Date.now() - call.start) > 4 * 60000) refreshChips(); }, 1000)};
+  if (call) endCall();                        // a call left open on another lead is closed and saved first
+  const now = Date.now();
+  call = {id: selId, start: now, stages: new Set(), objections: new Set(), trId: selId + "__" + now,
+    timer: setInterval(() => { const el = $("#callTime"); if (el && call) el.textContent = fmt(Date.now() - call.start); if (call && (Date.now() - call.start) > 4 * 60000) refreshChips(); }, 1000)};
   live = {listening: false, lines: [], interim: "", lastHit: {}, rec: null};
   renderDetail(); if (listen) startListening();
 }
 function endCall(){
-  if (!call) return; stopListening();
-  const dur = Math.round((Date.now() - call.start) / 1000), stages = [...call.stages], objections = [...call.objections];
-  clearInterval(call.timer); const id = call.id; call = null;
-  edit(id, r => { r.calls = [...(r.calls || []), {at: new Date().toISOString(), dur, stages, objections}].slice(-20); });
+  const c = call; if (!c) return; stopListening();
+  if (live && live.interim){ live.lines.push({t: Date.now(), text: live.interim}); live.interim = ""; }
+  const lines = live ? live.lines : [];
+  c.end = Date.now(); clearInterval(c.timer); clearTimeout(c.trTimer); call = null; live = null;
+  const keep = lines.length > 0 && !readOnly;
+  const entry = {at: new Date(c.end).toISOString(), dur: Math.round((c.end - c.start) / 1000), stages: [...c.stages], objections: [...c.objections], ...(keep ? {tr: c.trId} : {})};
+  edit(c.id, r => { const i = (r.calls || []).findIndex(x => x.tr && x.tr === c.trId);
+    r.calls = i >= 0 ? r.calls.map((x, j) => j === i ? entry : x) : [...(r.calls || []), entry].slice(-20); });
+  if (keep){
+    const d = trDoc(c, lines, "final"); trCache[c.trId] = d; fillText[c.id] = trText(d);
+    saveTr(c, lines, "final").then(ok => { if (!ok) setSync("err", "התמלול לא נשמר בשרת. הוא עדיין בתיבה \"סיכום עם Claude\""); });
+  }
+  if (c.id !== selId) return;
   renderDetail(); document.getElementById("fillBox")?.scrollIntoView({behavior: "smooth", block: "start"});
 }
+addEventListener("pagehide", () => stopListening());   // never leave the microphone listening behind a closed page
+
+// ---------- transcripts ----------
+// One row per call in "transcripts", apart from the lead records, so the live list stays small.
+// During a call the transcript is saved every 15 seconds; the lead's call log points to it, so a call cut off by a reload is still found.
+function trDoc(c, lines, status){
+  const l = DATA.find(x => x.id === c.id) || {};
+  const d = {lead: c.id, name: l.name || "", niche: l.niche || "", at: new Date(c.start).toISOString(), dur: Math.round(((c.end || Date.now()) - c.start) / 1000), status,
+    stages: STAGES[trackKind(l)].map(([n]) => n).filter(n => c.stages.has(n)), objections: [...c.objections],
+    lines: lines.map(x => ({s: Math.round((x.t - c.start) / 1000), x: x.text}))};
+  while (d.lines.length > 1 && JSON.stringify(d).length > 400000){ d.lines.shift(); d.trimmed = true; }
+  return d;
+}
+function trText(d){
+  return [`שיחה עם: ${d.name}${d.niche ? " (" + d.niche + ")" : ""}`,
+    `תאריך: ${new Date(d.at).toLocaleString("he-IL")} · משך: ${fmt(d.dur * 1000)}`,
+    `שלבים שזוהו: ${(d.stages || []).join(", ") || "אין"}`,
+    `התנגדויות שעלו: ${(d.objections || []).join(", ") || "אין"}`,
+    "", "תמלול (ערוץ אחד, בלי הפרדה בין הדוברים):",
+    ...(d.lines || []).map(x => `[${fmt(x.s * 1000)}] ${x.x}`)].join("\n");
+}
+function queueTrSave(){
+  const c = call; if (!c || readOnly || c.trTimer) return;
+  c.trTimer = setTimeout(() => { c.trTimer = null; if (call === c && live) saveTr(c, live.lines, "live"); }, 15000);
+}
+function saveTr(c, lines, status){
+  if (readOnly || !lines.length) return Promise.resolve(false);
+  const doc = trDoc(c, lines, status);
+  c.trChain = (c.trChain || Promise.resolve(true)).then(async () => {
+    const {error} = await sb.from("transcripts").upsert({id: c.trId, lead_id: c.id, data: doc, updated_at: new Date().toISOString(), updated_by: user.id});
+    if (error) return false;
+    if (status === "live" && !c.indexed && call === c){ c.indexed = true;
+      edit(c.id, r => { r.calls = [...(r.calls || []), {at: new Date(c.start).toISOString(), dur: 0, stages: [], tr: c.trId}].slice(-20); }); }
+    return true;
+  }).catch(() => false);
+  return c.trChain;
+}
+$("#detail").addEventListener("toggle", async e => {
+  const d = e.target; if (!d.matches?.(".trd") || !d.open) return;
+  const id = d.dataset.tr, body = d.querySelector(".trbody");
+  const showTr = t => { body.innerHTML = (t.lines || []).map(x => `<div class="trline"><span class="ts">${fmt(x.s * 1000)}</span>${esc(x.x)}</div>`).join("")
+    + `<div class="inline"><button type="button" class="btn sm" data-trfill="${esc(id)}">העבר ל"סיכום עם Claude"</button></div>`; };
+  if (trCache[id] && !(call && call.trId === id)){ showTr(trCache[id]); return; }
+  const {data, error} = await sb.from("transcripts").select("data").eq("id", id).maybeSingle();
+  if (error){ body.textContent = "טעינת התמלול נכשלה. סגור ופתח שוב."; return; }
+  if (!data){ body.textContent = "התמלול לא נמצא בשרת."; return; }
+  trCache[id] = data.data; showTr(trCache[id]);
+}, true);
 function startListening(){
   if (!SR){ liveMsg("הדפדפן הזה לא תומך בתמלול. פתח את האתר ב-Google Chrome."); return; }
   if (!live) return; live.listening = true;
   const r = new SR(); r.lang = "he-IL"; r.continuous = true; r.interimResults = true; r.maxAlternatives = 1; live.rec = r;
   r.onresult = ev => { if (!live) return; live.interim = "";
     for (let i = ev.resultIndex; i < ev.results.length; i++){ const res = ev.results[i], txt = res[0].transcript.trim(); if (!txt) continue;
-      if (res.isFinal){ live.lines.push({t: Date.now(), text: txt}); detect(txt); } else live.interim += (live.interim ? " " : "") + txt; }
+      if (res.isFinal){ live.lines.push({t: Date.now(), text: txt}); detect(txt); queueTrSave(); } else live.interim += (live.interim ? " " : "") + txt; }
     if (live.interim) detect(live.interim); renderTranscript(); };
   r.onerror = ev => {
     if (ev.error === "not-allowed" || ev.error === "service-not-allowed"){ liveMsg("Chrome לא קיבל גישה למיקרופון. לחץ על סמל המנעול ליד הכתובת ואשר מיקרופון."); stopListening(); renderDetail(); }
@@ -340,7 +423,7 @@ function startListening(){
 }
 function stopListening(){ if (!live) return; live.listening = false; try { live.rec && live.rec.stop(); } catch {} }
 function detect(text){
-  const l = DATA.find(x => x.id === selId); if (!l || !call) return; const t = norm(text);
+  const l = call && DATA.find(x => x.id === call.id); if (!l) return; const t = norm(text);
   for (const [n, kws] of STAGES[trackKind(l)]) if (!call.stages.has(n) && kws.some(k => has(t, k))){ call.stages.add(n); refreshChips(); }
   const blocks = objBlocks(l);
   for (const [kws, frags] of OBJ){ const kw = kws.find(k => has(t, k)); if (!kw) continue;
@@ -353,7 +436,6 @@ function renderLiveObj(){ const box = $("#liveObj"); if (!box) return; const c =
 function refreshChips(){ const l = DATA.find(x => x.id === selId); const box = $("#stageChips"); if (!l || !box || !call) return;
   const kind = trackKind(l), late = (Date.now() - call.start) > 4 * 60000;
   box.querySelectorAll(".stagechip").forEach(b => { const n = b.dataset.stage, d = call.stages.has(n); b.classList.toggle("done", d); b.classList.toggle("miss", !d && late && MUST[kind].includes(n)); b.textContent = (d ? "✓ " : "") + n; }); }
-const transcriptText = () => live ? live.lines.map(x => `[${fmt(x.t - (live.lines[0]?.t || x.t))}] ${x.text}`).join("\n") : "";
 function renderTranscript(){ const box = $("#liveTranscript"); if (!box || !live) return;
   box.innerHTML = live.lines.slice(-40).map(x => `<div><span class="ts">${fmt(x.t - (call ? call.start : x.t))}</span>${esc(x.text)}</div>`).join("") + (live.interim ? `<div class="interim">${esc(live.interim)}</div>` : "");
   box.scrollTop = box.scrollHeight; }
@@ -407,15 +489,15 @@ function applyFill(){
     if (f.status && f.status !== r.status){ if (f.status === "noanswer") r.attempts = (r.attempts || 0) + 1; r.status = f.status; r.history.push({t: new Date().toISOString(), s: f.status}); }
     if (f.callback) r.callback = f.callback;
     if (f.notes) r.notes = (r.notes ? r.notes + "\n" : "") + `[${new Date().toLocaleDateString("he-IL")}] ${f.notes}`; });
-  pendingFill = null; live = null; renderList(); renderDetail();
+  pendingFill = null; renderList(); renderDetail();
 }
 
 // ---------- export / admin import ----------
 $("#exportCsv").addEventListener("click", () => {
-  const cols = ["מקור","ציון","שם","תחום","נישה","אזור","טלפון","סטטוס","ניסיונות","לחזור/מועד","עודכן","הערות", ...FORM.map(f => f[1])];
+  const cols = ["מקור","ציון","שם","תחום","נישה","אזור","טלפון","מספר מהאתר","סטטוס","ניסיונות","לחזור/מועד","עודכן","הערות", ...FORM.map(f => f[1])];
   const q = v => `"${String(v ?? "").replace(/"/g, '""')}"`;
   const rows = DATA.filter(l => rec(l.id).status !== "new").map(l => { const r = rec(l.id), s = r.summary || {};
-    return [l.src === "g" ? "גוגל" : "פייסבוק", l.score || "", l.name, l.niche, l.track, l.area, l.phone, SLABEL[r.status], r.attempts || 0, r.callback || "", r.updated || "", r.notes || "", ...FORM.map(f => s[f[0]] || "")].map(q).join(","); });
+    return [l.src === "g" ? "גוגל" : "פייסבוק", l.score || "", l.name, l.niche, l.track, l.area, l.phone, (l.webPhones || []).join(", "), SLABEL[r.status], r.attempts || 0, r.callback || "", r.updated || "", r.notes || "", ...FORM.map(f => s[f[0]] || "")].map(q).join(","); });
   const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob(["﻿" + [cols.map(q).join(","), ...rows].join("\n")], {type: "text/csv"}));
   a.download = `call-log-${new Date().toISOString().slice(0, 10)}.csv`; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
 });
