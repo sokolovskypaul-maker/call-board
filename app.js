@@ -3,6 +3,7 @@ const CFG = window.APP_CONFIG || {};
 const AUTH_HASH = location.hash;  // read before the client consumes the URL
 const $ = s => document.querySelector(s);
 const app = $("#app");
+const EMPTY_DETAIL = $("#detail").innerHTML;
 const esc = v => String(v ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const show = (id) => ["#authView", "#noAccess", "#mainView"].forEach(s => $(s).classList.toggle("hidden", s !== id));
 const sb = window.supabase.createClient(CFG.url, CFG.key, {auth: {persistSession: true, autoRefreshToken: true, detectSessionInUrl: true}});
@@ -110,6 +111,8 @@ async function start(session){
   for (const r of calls.data || []) byId[r.lead_id] = r.rec;
   buildFilters(); renderList();
   if (!DATA.length) $("#detail").innerHTML = `<div class="empty"><b>אין עדיין לידים</b>${isAdmin ? "לחץ \"ייבוא נתונים (מנהל)\" ובחר את קובץ הנתונים." : "פול עוד לא ייבא את הלידים."}</div>`;
+  else if (DATA.some(l => l.id === selId)) renderDetail();
+  else { selId = null; $("#detail").innerHTML = EMPTY_DETAIL; }
   subscribe(); setSync("ok", "מסונכרן");
 }
 function subscribe(){
