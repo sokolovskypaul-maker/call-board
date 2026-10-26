@@ -11,10 +11,15 @@ const sb = window.supabase.createClient(CFG.url, CFG.key, {auth: {persistSession
 // ---------- constants ----------
 const STATUSES = [["new","לא התקשרתי"],["noanswer","לא ענה"],["callback","לחזור אליו"],["booked","נקבעה שיחה"],["done","שיחת היכרות בוצעה"],["demo","נקבע דמו"],["won","סגר"],["notrelevant","לא רלוונטי"],["dnc","ביקש לא להתקשר"]];
 const SLABEL = Object.fromEntries(STATUSES);
-const PRICE = {
-  "ראשית": "מחירון D-025: הקמה ₪4,900 + ₪1,490 לחודש (עד 600 דקות). רצפה ₪2,490 + ₪790. הנחה רק בתמורה למשהו.",
-  "צדדית": "מחיר פיילוט D-028: הקמה ₪1,490 + ₪490 לחודש (עד 400 דקות), בתמורה להמלצה מוקלטת. בלי המלצה: ₪2,490 + ₪790."
-};
+// Every price we quote is before VAT (Israeli VAT, 18% since 2025). Prices follow cold-call-short-v3:
+// type B = repairs and service calls (D-028), type A = projects (D-034).
+const VAT = 0.18;
+const ils = n => "₪" + Math.round(n).toLocaleString("he-IL");
+const withVat = n => `${ils(n)} פלוס מע"מ (${ils(n * (1 + VAT))} כולל מע"מ)`;
+const PRICES = {
+  B: {monthly: 790, pilot: 490, text: `סוג ב׳ (D-028): ₪2,490 הקמה ו-₪790 לחודש, פלוס מע"מ. פיילוט ל-5 הראשונים: ₪1,490 הקמה ו-₪490 לחודש, פלוס מע"מ, בתמורה להמלצה מוקלטת.`},
+  A: {monthly: 1490, setup: 2990, text: `סוג א׳ (D-034): ₪2,990 הקמה פלוס מע"מ, כולל החודש הראשון. מהחודש השני ₪1,490 לחודש פלוס מע"מ. לקוח מייסד ₪1,190, הרצפה ₪2,490 ו-₪790, פלוס מע"מ.`}};
+const kindOf = l => (rec(l.id).summary || {}).calc_type || (/מנעול|חשמל/.test(l.niche || "") || /תיקון/.test(l.name || "") ? "B" : "A");
 const FORM = [
   ["staff","עובדים / מי עונה לטלפון","text"],["visits","ביקורי מדידה (או קריאות) בשבוע","text"],
   ["close","אחוז סגירה אחרי ביקור","text"],["deal","עסקה ממוצעת (₪)","text"],
@@ -52,10 +57,12 @@ const OBJ = [
 // ---------- state ----------
 let DATA = [], SCRIPTS = {discovery: "", sales: ""}, user = null, isAdmin = false, selId = null, channel = null, readOnly = false;
 const byId = {}, timers = new Map(), chains = new Map();
+const pendingKeys = new Map();   // lead id -> fields edited since the last save
+const inflight = new Map();      // lead id -> saves on their way to the server
+const fieldState = new Map();    // lead id -> {field: "saving" | "saved" | "error"}, shown as "נשמר ✓" beside each field
 let call = null;           // {id, start, end, stages:Set, objections:Set, timer, trId, trTimer, trChain, indexed}
 let live = null;           // {rec, listening, lines:[], interim, lastHit:{}}
 let pendingFill = null;
-const fillText = {};       // lead id -> text in the "summary with Claude" box (survives re-renders)
 const trCache = {};        // transcript id -> loaded transcript
 const blank = () => ({status: "new", attempts: 0, notes: "", callback: "", summary: {}, history: []});
 const rec = id => byId[id] || blank();
@@ -128,29 +135,60 @@ function subscribe(){
   if (channel) sb.removeChannel(channel);
   channel = sb.channel("calls-live").on("postgres_changes", {event: "*", schema: "public", table: "calls"}, payload => {
     const row = payload.new && payload.new.lead_id ? payload.new : null; if (!row) return;
-    if (timers.has(row.lead_id)) return;                 // our own unsaved typing wins locally
+    if (timers.has(row.lead_id) || inflight.get(row.lead_id)) return;   // our own unsaved typing wins locally
+    const mine = byId[row.lead_id];                                    // an echo of an older save must not undo newer typing
+    if (mine && mine.updated && row.rec && row.rec.updated && mine.updated > row.rec.updated) return;
     byId[row.lead_id] = row.rec; renderList();
     const typing = document.activeElement && $("#detail").contains(document.activeElement) && /INPUT|TEXTAREA/.test(document.activeElement.tagName);
     if (row.lead_id === selId && !typing && !(live && live.listening)) renderDetail();
   }).subscribe(status => { if (status === "SUBSCRIBED") setSync("ok", "מסונכרן"); else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") setSync("err", "החיבור החי נפל. רענן את הדף"); });
 }
-function edit(id, mutate, debounce = 0){
+// Every change goes to the server about half a second after the last keystroke, at once when a field loses focus,
+// and when the page is hidden or closed. `key` names the field, so its "נשמר ✓" mark can follow the save.
+function edit(id, mutate, debounce = 0, key = ""){
   if (readOnly) return;
-  const r = structuredClone(rec(id)); mutate(r);
+  const r = structuredClone(rec(id)); r.history = r.history || []; r.summary = r.summary || {}; mutate(r);
   r.updated = new Date().toISOString(); if (r.history.length > 30) r.history = r.history.slice(-30);
   byId[id] = r; clearTimeout(timers.get(id));
+  if (key){ if (!pendingKeys.has(id)) pendingKeys.set(id, new Set()); pendingKeys.get(id).add(key); markField(id, key, "saving"); }
   timers.set(id, setTimeout(() => { timers.delete(id); flush(id); }, debounce));
   setSync("saving", "שומר…");
 }
-function flush(id){
-  const body = JSON.parse(JSON.stringify(byId[id]));
+function flushNow(id){ if (!timers.has(id)) return; clearTimeout(timers.get(id)); timers.delete(id); flush(id); }
+function flushAll(){ for (const id of [...timers.keys()]) flushNow(id); }
+const busy = () => timers.size > 0 || [...inflight.values()].some(Boolean);
+function flush(id, attempt = 0){
+  const body = JSON.parse(JSON.stringify(byId[id])), keys = [...(pendingKeys.get(id) || [])]; pendingKeys.delete(id);
+  inflight.set(id, (inflight.get(id) || 0) + 1);
+  const save = () => sb.from("calls").upsert({lead_id: id, rec: body, updated_at: new Date().toISOString(), updated_by: user.id});
   const p = (chains.get(id) || Promise.resolve()).then(async () => {
-    const {error} = await sb.from("calls").upsert({lead_id: id, rec: body, updated_at: new Date().toISOString(), updated_by: user.id});
-    if (error){ setSync("err", "השמירה נכשלה. בדוק חיבור ונסה שוב"); return; }
-    if (!timers.size) setSync("ok", "נשמר ומסונכרן");
+    let res = await save().catch(e => ({error: e}));
+    if (res.error && /jwt|token|401|auth/i.test(String(res.error.message) + res.error.code)){ await sb.auth.refreshSession().catch(() => {}); res = await save().catch(e => ({error: e})); }
+    inflight.set(id, inflight.get(id) - 1);
+    if (res.error){
+      if (!pendingKeys.has(id)) pendingKeys.set(id, new Set());
+      for (const k of keys){ pendingKeys.get(id).add(k); markField(id, k, "error"); }
+      setSync("err", "השמירה נכשלה. מנסה שוב…");
+      if (!timers.has(id)) timers.set(id, setTimeout(() => { timers.delete(id); flush(id, attempt + 1); }, Math.min(30000, 2000 * 2 ** attempt)));
+      return;
+    }
+    for (const k of keys) markField(id, k, "saved");
+    if (!busy()) setSync("ok", "נשמר ומסונכרן");
   });
-  chains.set(id, p);
+  chains.set(id, p.catch(() => {}));
 }
+const FIELD_TEXT = {saving: "שומר…", saved: "נשמר ✓", error: "לא נשמר, מנסה שוב"};
+function markField(id, key, state){
+  if (!fieldState.has(id)) fieldState.set(id, {});
+  fieldState.get(id)[key] = state;
+  if (id !== selId) return;
+  document.querySelectorAll(`#detail [data-sv="${CSS.escape(key)}"]`).forEach(el => { el.textContent = FIELD_TEXT[state]; el.className = "sv " + state; });
+}
+const sv = (l, key) => { const s = (fieldState.get(l.id) || {})[key]; return `<span class="sv ${s || ""}" data-sv="${esc(key)}">${s ? FIELD_TEXT[s] : ""}</span>`; };
+$("#detail").addEventListener("focusout", () => { if (selId) flushNow(selId); });
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") flushAll(); });
+addEventListener("pagehide", flushAll);
+addEventListener("beforeunload", e => { if (busy()){ flushAll(); e.preventDefault(); e.returnValue = ""; } });
 
 // ---------- list ----------
 function buildFilters(){
@@ -274,11 +312,14 @@ function renderDetail(){
       ${li("פרט מהאתר לפתיחה", hc.detail)}${hc.hook ? `<p class="opener">"${esc(hc.hook)}"</p>` : ""}
       ${hc.obj ? `<div class="bk obj"><div class="k">ההתנגדות הצפויה, והתשובה מהתסריט</div><div><b>"${esc(hc.obj)}"</b></div><div>${esc(hc.ans || "")}</div></div>` : ""}
       ${hc.wa ? `<div class="bk"><div class="k">לוואטסאפ, רק אחרי "כן" בשיחה${hc.general ? " · דמו כללי" : ""}</div><div class="inline"><span class="wa">${esc(hc.wa)}</span><button type="button" class="btn sm copy" data-ph="${esc(hc.wa)}">העתק</button></div></div>` : ""}</div></div>` : "";
-  const form = FORM.map(([k, label, type, opts]) => { const v = sm[k] ?? (k === "price" ? (PRICE[l.track] || "") : "");
-    if (type === "radio") return `<div class="f"><span>${label}</span><span class="radios" role="radiogroup" aria-label="${label}">${opts.map((o, i) => `<label for="f-${k}-${i}"><input type="radio" id="f-${k}-${i}" name="f-${k}" value="${esc(o)}" ${v === o ? "checked" : ""}> ${esc(o)}</label>`).join("")}</span></div>`;
-    if (type === "area") return `<label class="f" for="f-${k}">${label}<textarea id="f-${k}" data-f="${k}">${esc(v)}</textarea></label>`;
-    if (type === "datetime") return `<label class="f" for="f-${k}">${label}<input type="datetime-local" id="f-${k}" data-f="${k}" value="${esc(v)}"></label>`;
-    return `<label class="f" for="f-${k}">${label}<input type="text" id="f-${k}" data-f="${k}" value="${esc(v)}"></label>`; }).join("");
+  const P = PRICES[kindOf(l)];
+  const form = FORM.map(([k, label, type, opts]) => { const v = sm[k] ?? (k === "price" ? P.text : ""), mark = sv(l, "s:" + k);
+    if (type === "radio") return `<div class="f"><span>${label} ${mark}</span><span class="radios" role="radiogroup" aria-label="${label}">${opts.map((o, i) => `<label for="f-${k}-${i}"><input type="radio" id="f-${k}-${i}" name="f-${k}" value="${esc(o)}" ${v === o ? "checked" : ""}> ${esc(o)}</label>`).join("")}</span></div>`;
+    if (type === "area") return `<label class="f" for="f-${k}">${label} ${mark}<textarea id="f-${k}" data-f="${k}">${esc(v)}</textarea></label>`;
+    if (type === "datetime") return `<label class="f" for="f-${k}">${label} ${mark}<input type="datetime-local" id="f-${k}" data-f="${k}" value="${esc(v)}"></label>`;
+    return `<label class="f" for="f-${k}">${label} ${mark}<input type="text" id="f-${k}" data-f="${k}" value="${esc(v)}"></label>`; }).join("");
+  const scriptBoxes = (SCRIPTS.short ? `<details class="script"><summary>התסריט הקצר (גרסה 3), עם מחשבון</summary>${calcHtml(l)}<div class="md">${mdToHtml(SCRIPTS.short)}</div></details>` : "")
+    + `<details class="script"><summary>${l.track === "ראשית" ? "תסריט שיחת ההיכרות" : "תסריט שיחת המכירה"} (מלא), עם מחשבון</summary>${calcHtml(l)}<div class="md">${mdToHtml(scriptFor(l))}</div></details>`;
   $("#detail").innerHTML = `
     <button type="button" class="btn sm back" id="back">→ חזרה לרשימה</button>
     <div class="head"><div class="whois"><h2>${esc(l.name)}</h2>${(l.tags || []).length ? `<div class="tags">${l.tags.map(t => `<span class="tag">${esc(t)}${l.priority ? " · מקום " + l.priority + " בתור" : ""}</span>`).join("")}</div>` : ""}<div class="meta">${meta}</div><div class="meta">${esc(l.area || "אזור לא ידוע")}</div><div class="links">${links}</div></div><div class="dial">${dial || '<span class="meta">אין טלפון</span>'}</div></div>
@@ -289,26 +330,56 @@ function renderDetail(){
     <div class="facts">${kv("מה העסק עושה", l.what)}${kv("ביקור מדידה חינם", l.free)}${kv("הבטחת זמן תגובה", l.resp)}${kv("וואטסאפ באתר", l.wa)}${kv("טופס באתר", l.form)}${kv("בעלים מפעיל", l.owner)}${kv("טלפון נוסף באתר", l.sitePhone)}${kv("הערות מהאיסוף", l.notes)}</div>
     <section class="box"><h3>סטטוס</h3>
       <div class="statuses">${STATUSES.map(([k, v]) => `<button type="button" class="btn sm" data-st="${k}" aria-pressed="${r.status === k}">${v}</button>`).join("")}</div>
-      <div class="inline"><label for="f-callback" class="note">לחזור אליו / מועד:</label><input type="datetime-local" id="f-callback" value="${esc(r.callback || "")}"><span class="note">ניסיונות: ${r.attempts || 0}</span></div>
-      <label for="f-notes" class="note">ההערות שלך</label><textarea id="f-notes" placeholder="מה עלה בשיחה, עם מי דיברת, מתי לחזור">${esc(r.notes || "")}</textarea>
+      <div class="inline"><label for="f-callback" class="note">לחזור אליו / מועד:</label><input type="datetime-local" id="f-callback" value="${esc(r.callback || "")}">${sv(l, "callback")}<span class="note">ניסיונות: ${r.attempts || 0}</span></div>
+      <label for="f-notes" class="note">ההערות שלך ${sv(l, "notes")}</label><textarea id="f-notes" placeholder="מה עלה בשיחה, עם מי דיברת, מתי לחזור">${esc(r.notes || "")}</textarea>
       ${r.status === "dnc" ? `<div class="watch">ביקש לא להתקשר. מחיקה מהרשימות דורשת "מאשר הרמטית".</div>` : ""}
-      ${r.history.length ? `<ul class="hist">${r.history.slice(-6).reverse().map(h => `<li>${fmtDT(h.t)}: ${esc(SLABEL[h.s] || h.s)}</li>`).join("")}</ul>` : ""}
+      ${(r.history || []).length ? `<ul class="hist">${r.history.slice(-6).reverse().map(h => `<li>${fmtDT(h.t)}: ${esc(SLABEL[h.s] || h.s)}</li>`).join("")}</ul>` : ""}
     </section>
-    <section class="box" id="fillBox"><h3>סיכום עם Claude</h3>
-      <div class="note">אחרי השיחה התמלול נכנס לכאן לבד, ונשמר גם ב"תמלולי שיחות". לוחצים "העתק ל-Claude", מדביקים בצ'אט של Claude, ומעתיקים לכאן את התשובה. שום דבר לא נכנס לטופס לפני שאתה מאשר.</div>
+    <section class="box"><h3>מחשבון: כמה הוא מפסיד בחודש</h3>${calcHtml(l)}</section>
+    <section class="box" id="fillBox"><h3>מה היה בשיחה, וסיכום עם Claude</h3>
+      <div class="note">כאן כותבים מה היה בשיחה, ונשמר אוטומטית. אחרי שיחה במצב הקשבה, התמלול נכנס לכאן לבד, ונשמר גם ב"תמלולי שיחות". לסיכום: "העתק ל-Claude", מדביקים בצ'אט של Claude, ומעתיקים לכאן את התשובה. שום דבר לא נכנס לטופס לפני שאתה מאשר.</div>
       ${trs.length ? `<div class="trlog"><div class="note">תמלולי שיחות</div>${trs.map(x => `<details class="trd" data-tr="${esc(x.tr)}"><summary>${fmtDT(x.at)} · ${call && call.trId === x.tr ? "בשיחה עכשיו" : x.dur ? fmt(x.dur * 1000) + " דקות" : "השיחה נקטעה"}</summary><div class="trbody">טוען…</div></details>`).join("")}</div>` : ""}
-      <textarea id="f-transcript" placeholder="התמלול מהשיחה (או הדבק תמלול ידני)">${esc(fillText[l.id] || "")}</textarea>
+      <label for="f-transcript" class="note">מה היה בשיחה / תמלול ${sv(l, "callText")}</label>
+      <textarea id="f-transcript" placeholder="מה היה בשיחה, במילים שלך, או התמלול">${esc(r.callText || "")}</textarea>
       <div class="inline"><button type="button" class="btn sm" id="copyPrompt">העתק ל-Claude</button><a class="btn sm" href="https://claude.ai/new" target="_blank" rel="noopener noreferrer">פתח את Claude</a><span class="note" id="fillMsg"></span></div>
-      <textarea id="f-answer" placeholder="הדבק כאן את התשובה של Claude"></textarea>
+      <label for="f-answer" class="note">התשובה של Claude ${sv(l, "claudeAnswer")}</label>
+      <textarea id="f-answer" placeholder="הדבק כאן את התשובה של Claude">${esc(r.claudeAnswer || "")}</textarea>
       <div class="inline"><button type="button" class="btn sm" id="parseAnswer">מלא את הטופס מהתשובה</button></div>
       <div id="fillPreview"></div>
     </section>
     <section class="box"><h3>טופס סיכום שיחה</h3>
-      <div class="price">${esc(PRICE[l.track] || "")} את המחיר אומרים רק בסוף, ורק אם עלה כאב ממשי.</div>
+      <div class="price">${esc(P.text)} את המחיר אומרים רק בסוף, ורק אם עלה כאב ממשי.</div>
       <div class="form">${form}</div>
     </section>
-    <details class="script"><summary>${l.track === "ראשית" ? "תסריט שיחת ההיכרות" : "תסריט שיחת המכירה"} (מלא)</summary><div class="md">${mdToHtml(scriptFor(l))}</div></details>`;
+    ${scriptBoxes}`;
   renderTranscript(); renderLiveObj();
+}
+// ---------- calculator: missed calls a week × average job × close rate = what he loses a month ----------
+// The same inputs appear in the card and inside each script; all copies stay in step and save to the lead's summary.
+const WEEKS = 4.33;
+function calcNumsOf(s){ const m = +s.calc_missed, d = +s.calc_deal, c = +s.calc_close; return {m, d, c, ok: m > 0 && d > 0 && c > 0, loss: m * WEEKS * (c / 100) * d}; }
+const calcNums = l => calcNumsOf(rec(l.id).summary || {});
+function calcHtml(l){
+  const s = rec(l.id).summary || {}, kind = kindOf(l);
+  const inp = (k, label, ph) => `<label class="f">${label} ${sv(l, "s:" + k)}<input type="number" inputmode="decimal" min="0" class="calc-in" data-k="${k}" value="${esc(s[k] ?? "")}" placeholder="${ph}"></label>`;
+  return `<div class="calc"><div class="calcgrid">${inp("calc_missed", "שיחות שהוא מפספס בשבוע", "למשל 5")}${inp("calc_deal", "שווי עבודה ממוצעת (₪)", "למשל 450")}${inp("calc_close", "אחוז סגירה (%)", "למשל 30")}
+    <label class="f">סוג העסק ${sv(l, "s:calc_type")}<select class="calc-in" data-k="calc_type"><option value="B" ${kind === "B" ? "selected" : ""}>ב׳: תיקון או קריאת שירות</option><option value="A" ${kind === "A" ? "selected" : ""}>א׳: פרויקט</option></select></label></div>
+    <div class="calcout">${calcOut(l)}</div></div>`;
+}
+function calcOut(l){
+  const {m, d, c, ok, loss} = calcNums(l), kind = kindOf(l), P = PRICES[kind];
+  const price = kind === "B" ? `${withVat(P.monthly)} לחודש. בפיילוט: ${withVat(P.pilot)}` : `${withVat(P.monthly)} לחודש, מהחודש השני. ההקמה ${ils(P.setup)} פלוס מע"מ, כולל החודש הראשון`;
+  if (!ok) return `<div class="note">ממלאים את שלושת המספרים בזמן השיחה, והחשבון מופיע כאן. מחיר אלה: ${esc(price)}.</div>`;
+  const ratio = loss / (P.monthly * (1 + VAT));
+  return `<div class="loss"><b>הוא מפסיד בערך ${ils(loss)} בחודש</b> <span class="note">(${m} שיחות בשבוע × ${WEEKS} שבועות × ${c}% סגירה × ${ils(d)})</span></div>
+    <div>מחיר אלה: ${esc(price)}. ${ratio >= 1 ? `ההפסד שלו גדול פי ${ratio.toFixed(1)} מהמחיר החודשי, כולל מע"מ.` : "ההפסד שלו קטן מהמחיר החודשי. לפי התסריט אומרים את זה ביושר: אצלו זה פחות בוער."}</div>
+    <div class="say">לשיחה: "אז גם אם רק ${c}% מהשיחות האלה היו הופכות לעבודה, זה ${ils(loss)} בחודש שהולכים למתחרה. נכון?"</div>`;
+}
+function refreshCalc(l, except){
+  const s = rec(l.id).summary || {};
+  document.querySelectorAll("#detail .calc-in").forEach(el => { if (el !== except && s[el.dataset.k] !== undefined) el.value = s[el.dataset.k]; });
+  document.querySelectorAll("#detail .calcout").forEach(o => o.innerHTML = calcOut(l));
+  const f = $("#f-calc"); if (f && f !== document.activeElement) f.value = s.calc || "";
 }
 $("#detail").addEventListener("click", async e => {
   const t = e.target;
@@ -321,7 +392,8 @@ $("#detail").addEventListener("click", async e => {
   if (t.closest("#callGoto") && call){ selId = call.id; renderList(); renderDetail(); return; }
   const tf = t.closest("[data-trfill]");
   if (tf && trCache[tf.dataset.trfill]){
-    fillText[selId] = trText(trCache[tf.dataset.trfill]); const ta = $("#f-transcript"); if (ta) ta.value = fillText[selId];
+    const text = trText(trCache[tf.dataset.trfill]); edit(selId, r => { r.callText = text; }, 0, "callText");
+    const ta = $("#f-transcript"); if (ta) ta.value = text;
     $("#fillBox")?.scrollIntoView({behavior: "smooth", block: "start"}); return;
   }
   if (t.closest("#listenToggle")){ live && live.listening ? stopListening() : startListening(); renderDetail(); return; }
@@ -337,11 +409,17 @@ $("#detail").addEventListener("click", async e => {
 });
 $("#detail").addEventListener("input", e => {
   const t = e.target; if (!selId) return;
-  if (t.id === "f-transcript") fillText[selId] = t.value;
-  else if (t.id === "f-notes") edit(selId, r => { r.notes = t.value; }, 700);
-  else if (t.id === "f-callback"){ edit(selId, r => { r.callback = t.value; }); renderList(); }
-  else if (t.dataset.f) edit(selId, r => { r.summary = {...(r.summary || {}), [t.dataset.f]: t.value}; }, 700);
-  else if (t.type === "radio" && t.name.startsWith("f-")){ edit(selId, r => { r.summary = {...(r.summary || {}), [t.name.slice(2)]: t.value}; }); renderStats(); }
+  if (t.id === "f-transcript") edit(selId, r => { r.callText = t.value; }, 600, "callText");
+  else if (t.id === "f-answer") edit(selId, r => { r.claudeAnswer = t.value; }, 600, "claudeAnswer");
+  else if (t.id === "f-notes") edit(selId, r => { r.notes = t.value; }, 600, "notes");
+  else if (t.id === "f-callback"){ edit(selId, r => { r.callback = t.value; }, 0, "callback"); renderList(); }
+  else if (t.classList.contains("calc-in")){
+    const l = DATA.find(x => x.id === selId), k = t.dataset.k;
+    edit(selId, r => { r.summary[k] = t.value; const n = calcNumsOf(r.summary); if (n.ok) r.summary.calc = `${ils(n.loss)} בחודש (${n.m} שיחות בשבוע × ${n.c}% סגירה × ${ils(n.d)})`; }, k === "calc_type" ? 0 : 600, "s:" + k);
+    if (l) refreshCalc(l, t);
+  }
+  else if (t.dataset.f) edit(selId, r => { r.summary = {...(r.summary || {}), [t.dataset.f]: t.value}; }, 600, "s:" + t.dataset.f);
+  else if (t.type === "radio" && t.name.startsWith("f-")){ edit(selId, r => { r.summary = {...(r.summary || {}), [t.name.slice(2)]: t.value}; }, 0, "s:" + t.name.slice(2)); renderStats(); }
 });
 
 // ---------- live call: timer, stages, listening ----------
@@ -362,12 +440,11 @@ function endCall(){
   c.end = Date.now(); clearInterval(c.timer); clearTimeout(c.trTimer); call = null; live = null;
   const keep = lines.length > 0 && !readOnly;
   const entry = {at: new Date(c.end).toISOString(), dur: Math.round((c.end - c.start) / 1000), stages: [...c.stages], objections: [...c.objections], ...(keep ? {tr: c.trId} : {})};
+  const d = keep ? trDoc(c, lines, "final") : null; if (d) trCache[c.trId] = d;
   edit(c.id, r => { const i = (r.calls || []).findIndex(x => x.tr && x.tr === c.trId);
-    r.calls = i >= 0 ? r.calls.map((x, j) => j === i ? entry : x) : [...(r.calls || []), entry].slice(-20); });
-  if (keep){
-    const d = trDoc(c, lines, "final"); trCache[c.trId] = d; fillText[c.id] = trText(d);
-    saveTr(c, lines, "final").then(ok => { if (!ok) setSync("err", "התמלול לא נשמר בשרת. הוא עדיין בתיבה \"סיכום עם Claude\""); });
-  }
+    r.calls = i >= 0 ? r.calls.map((x, j) => j === i ? entry : x) : [...(r.calls || []), entry].slice(-20);
+    if (d) r.callText = trText(d); }, 0, d ? "callText" : "");
+  if (keep) saveTr(c, lines, "final").then(ok => { if (!ok) setSync("err", "התמלול לא נשמר בטבלת התמלולים. הוא שמור בכרטיס, בתיבה \"מה היה בשיחה\""); });
   if (c.id !== selId) return;
   renderDetail(); document.getElementById("fillBox")?.scrollIntoView({behavior: "smooth", block: "start"});
 }
@@ -507,10 +584,10 @@ function applyFill(){
 
 // ---------- export / admin import ----------
 $("#exportCsv").addEventListener("click", () => {
-  const cols = ["מקור","ציון","שם","תחום","נישה","אזור","טלפון","מספר מהאתר","סטטוס","ניסיונות","לחזור/מועד","עודכן","הערות", ...FORM.map(f => f[1])];
+  const cols = ["מקור","ציון","שם","תחום","נישה","אזור","טלפון","מספר מהאתר","סטטוס","ניסיונות","לחזור/מועד","עודכן","הערות","מה היה בשיחה", ...FORM.map(f => f[1])];
   const q = v => `"${String(v ?? "").replace(/"/g, '""')}"`;
   const rows = DATA.filter(l => rec(l.id).status !== "new").map(l => { const r = rec(l.id), s = r.summary || {};
-    return [l.src === "g" ? "גוגל" : "פייסבוק", l.score || "", l.name, l.niche, l.track, l.area, l.phone, (l.webPhones || []).join(", "), SLABEL[r.status], r.attempts || 0, r.callback || "", r.updated || "", r.notes || "", ...FORM.map(f => s[f[0]] || "")].map(q).join(","); });
+    return [l.src === "g" ? "גוגל" : "פייסבוק", l.score || "", l.name, l.niche, l.track, l.area, l.phone, (l.webPhones || []).join(", "), SLABEL[r.status], r.attempts || 0, r.callback || "", r.updated || "", r.notes || "", r.callText || "", ...FORM.map(f => s[f[0]] || "")].map(q).join(","); });
   const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob(["﻿" + [cols.map(q).join(","), ...rows].join("\n")], {type: "text/csv"}));
   a.download = `call-log-${new Date().toISOString().slice(0, 10)}.csv`; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
 });
