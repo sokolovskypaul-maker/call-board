@@ -160,10 +160,11 @@ const busy = () => timers.size > 0 || [...inflight.values()].some(Boolean);
 function flush(id, attempt = 0){
   const body = JSON.parse(JSON.stringify(byId[id])), keys = [...(pendingKeys.get(id) || [])]; pendingKeys.delete(id);
   inflight.set(id, (inflight.get(id) || 0) + 1);
-  const save = () => sb.from("calls").upsert({lead_id: id, rec: body, updated_at: new Date().toISOString(), updated_by: user.id});
+  // The query builder is only "thenable" (no .catch), so it is awaited inside try rather than chained.
+  const save = async () => { try { return await sb.from("calls").upsert({lead_id: id, rec: body, updated_at: new Date().toISOString(), updated_by: user.id}); } catch (e){ return {error: e}; } };
   const p = (chains.get(id) || Promise.resolve()).then(async () => {
-    let res = await save().catch(e => ({error: e}));
-    if (res.error && /jwt|token|401|auth/i.test(String(res.error.message) + res.error.code)){ await sb.auth.refreshSession().catch(() => {}); res = await save().catch(e => ({error: e})); }
+    let res = await save();
+    if (res.error && /jwt|token|401|auth/i.test(String(res.error.message) + res.error.code)){ try { await sb.auth.refreshSession(); } catch {} res = await save(); }
     inflight.set(id, inflight.get(id) - 1);
     if (res.error){
       if (!pendingKeys.has(id)) pendingKeys.set(id, new Set());
