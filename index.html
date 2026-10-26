@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Hebrew:wght@400;500;600;700&family=Suez+One&family=IBM+Plex+Mono:wght@500;600&display=swap">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/dist/umd/supabase.js" integrity="sha384-BWcjm9OdFth9TbhCxZPdm+gAOUMAzQy9nmTs12ioXdCcbVnJaPMn+fMUoQCLt60R" crossorigin="anonymous"></script>
-<script src="config.js?v=2026-10-26c"></script>
+<script src="config.js?v=2026-10-27a"></script>
 <style>
 /* Layout: a two-pane call sheet. The call queue sits on the start side, the open lead's call card beside it; the live call panel sits at the top of the card. One column on phones. */
 :root{
@@ -130,6 +130,8 @@ header.top{padding-block:12px 10px;display:grid;gap:10px;border-bottom:1px solid
 .dialrow .lbl{font-size:12px;color:var(--muted)}
 .call.off{background:transparent;color:var(--muted);border:1.5px dashed var(--line);cursor:not-allowed;text-decoration:line-through}
 .flag{color:var(--warn-ink);font-weight:600}
+.tag{display:inline-block;font-size:11.5px;font-weight:600;border-radius:999px;padding:0 8px;background:var(--tape);color:var(--tape-ink);white-space:nowrap}
+.tags{display:flex;gap:6px;flex-wrap:wrap;margin:4px 0}
 .flag.dim{color:var(--muted)}
 .phonenotes{display:grid;gap:6px;margin-top:10px}
 .trlog{display:grid;gap:6px}
@@ -243,6 +245,6 @@ details.script summary{cursor:pointer;font-weight:600}
   </section>
 </div>
 
-<script src="app.js?v=2026-10-26c"></script>
+<script src="app.js?v=2026-10-27a"></script>
 </body>
 </html>

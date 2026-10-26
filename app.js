@@ -160,14 +160,15 @@ function buildFilters(){
 function rankKey(l){ const r = rec(l.id); let st = {callback: isDue(r) ? 0 : 4, booked: 1, demo: 1, new: 2, noanswer: 3, done: 6, won: 7, notrelevant: 8, dnc: 9}[r.status] ?? 5;
   if (l.virtual07 && (r.status === "new" || r.status === "noanswer")) st = 4.5;   // a virtual 07 line rarely reaches the owner: call these last
   if (l.noDial && ["new", "noanswer", "callback"].includes(r.status)) st = 8.5;   // held until a real number is found
-  return [st, l.src === "g" ? 0 : 1, -(l.score || 0), r.attempts || 0, l.order || 0]; }
+  else if (l.priority && (r.status === "new" || r.status === "noanswer")) st = -1; // a hand-picked call list (e.g. "חם-27.10") goes first, in its own order
+  return [st, l.priority || 999, l.src === "g" ? 0 : 1, -(l.score || 0), r.attempts || 0, l.order || 0]; }
 function cmp(a, b){ for (let i = 0; i < a.length; i++){ if (a[i] < b[i]) return -1; if (a[i] > b[i]) return 1; } return 0; }
 function filtered(){
   const q = $("#q").value.trim().toLowerCase().replace(/-/g, ""), src = $("#fSrc").value, ni = $("#fNiche").value, ms = +$("#fScore").value, fs = $("#fStatus").value;
   const out = DATA.filter(l => { const r = rec(l.id);
     if (src && l.src !== src) return false; if (ni && l.niche !== ni) return false;
     if (ms && !(l.src === "g" && l.score >= ms)) return false; if (fs && r.status !== fs) return false;
-    if (q){ const hay = (l.name + " " + l.area + " " + l.phone + " " + (l.webPhones || []).join(" ") + " " + l.niche + " " + (l.what || "") + " " + (l.brief?.owner || "")).toLowerCase().replace(/-/g, ""); if (!hay.includes(q)) return false; }
+    if (q){ const hay = (l.name + " " + l.area + " " + l.phone + " " + (l.webPhones || []).join(" ") + " " + (l.tags || []).join(" ") + " " + l.niche + " " + (l.what || "") + " " + (l.brief?.owner || "")).toLowerCase().replace(/-/g, ""); if (!hay.includes(q)) return false; }
     return true; });
   const s = $("#sort").value;
   if (s === "next") out.sort((a, b) => cmp(rankKey(a), rankKey(b)));
@@ -197,7 +198,8 @@ function renderList(){
   $("#list").innerHTML = items.length ? items.map(l => { const r = rec(l.id);
     const badge = l.src === "g" ? `<span class="sc s${l.score}" title="ציון התאמה ${l.score}">${l.score}</span>` : `<span class="sc fb" title="פייסבוק">FB</span>`;
     const when = isDue(r) ? ` · <span class="due">לחזור עכשיו</span>` : (["callback", "booked", "demo"].includes(r.status) && r.callback ? ` · ${fmtDT(r.callback)}` : "");
-    const flags = (l.noDial ? ` · <span class="flag">לא לחייג</span>` : "") + (l.phoneMismatch ? ` · <span class="flag">מספר מהאתר</span>` : "") + (l.virtual07 ? ` · <span class="flag dim">07</span>` : "");
+    const flags = (l.tags || []).map(t => ` <span class="tag">${esc(t)}${l.priority ? " · " + l.priority : ""}</span>`).join("")
+      + (l.noDial ? ` · <span class="flag">לא לחייג</span>` : "") + (l.phoneMismatch ? ` · <span class="flag">מספר מהאתר</span>` : "") + (l.virtual07 ? ` · <span class="flag dim">07</span>` : "");
     return `<button type="button" role="listitem" class="row ${l.id === selId ? "sel" : ""}" data-id="${esc(l.id)}">${badge}<span style="min-width:0"><span class="nm">${esc(l.name)}</span><span class="sub">${esc(l.niche)}${l.brief?.owner ? " · " + esc(l.brief.owner) : ""} · ${esc(l.area || "אזור לא ידוע")}${flags}${when}</span></span><span class="pill st-${r.status}">${SLABEL[r.status] || ""}${r.attempts ? ` ×${r.attempts}` : ""}</span></button>`;
   }).join("") : (DATA.length ? `<div class="empty"><b>אין תוצאות</b>נסה לנקות את החיפוש או את הסינון.</div>` : "");
   renderStats();
@@ -272,7 +274,7 @@ function renderDetail(){
     return `<label class="f" for="f-${k}">${label}<input type="text" id="f-${k}" data-f="${k}" value="${esc(v)}"></label>`; }).join("");
   $("#detail").innerHTML = `
     <button type="button" class="btn sm back" id="back">→ חזרה לרשימה</button>
-    <div class="head"><div class="whois"><h2>${esc(l.name)}</h2><div class="meta">${meta}</div><div class="meta">${esc(l.area || "אזור לא ידוע")}</div><div class="links">${links}</div></div><div class="dial">${dial || '<span class="meta">אין טלפון</span>'}</div></div>
+    <div class="head"><div class="whois"><h2>${esc(l.name)}</h2>${(l.tags || []).length ? `<div class="tags">${l.tags.map(t => `<span class="tag">${esc(t)}${l.priority ? " · מקום " + l.priority + " בתור" : ""}</span>`).join("")}</div>` : ""}<div class="meta">${meta}</div><div class="meta">${esc(l.area || "אזור לא ידוע")}</div><div class="links">${links}</div></div><div class="dial">${dial || '<span class="meta">אין טלפון</span>'}</div></div>
     ${phoneNotes ? `<div class="phonenotes">${phoneNotes}</div>` : ""}
     ${liveHtml(l)}
     ${brief}${objPanel(l)}
