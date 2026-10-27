@@ -9,7 +9,7 @@ const show = (id) => ["#authView", "#noAccess", "#mainView"].forEach(s => $(s).c
 const sb = window.supabase.createClient(CFG.url, CFG.key, {auth: {persistSession: true, autoRefreshToken: true, detectSessionInUrl: true}});
 
 // ---------- constants ----------
-const STATUSES = [["new","לא התקשרתי"],["noanswer","לא ענה"],["callback","לחזור אליו"],["booked","נקבעה שיחה"],["done","שיחת היכרות בוצעה"],["demo","נקבע דמו"],["won","סגר"],["notrelevant","לא רלוונטי"],["dnc","ביקש לא להתקשר"]];
+const STATUSES = [["new","לא התקשרתי"],["noanswer","לא ענה"],["voicemail","השארתי הודעה"],["callback","לחזור אליו"],["booked","נקבעה שיחה"],["done","שיחת היכרות בוצעה"],["demo","נקבע דמו"],["won","סגר"],["notrelevant","לא רלוונטי"],["dnc","ביקש לא להתקשר"]];
 const SLABEL = Object.fromEntries(STATUSES);
 // Every price we quote is before VAT (Israeli VAT, 18% since 2025). Prices follow cold-call-short-v3:
 // type B = repairs and service calls (D-028), type A = projects (D-034).
@@ -140,7 +140,8 @@ function subscribe(){
     if (mine && mine.updated && row.rec && row.rec.updated && mine.updated > row.rec.updated) return;
     byId[row.lead_id] = row.rec; renderList();
     const typing = document.activeElement && $("#detail").contains(document.activeElement) && /INPUT|TEXTAREA/.test(document.activeElement.tagName);
-    if (row.lead_id === selId && !typing && !(live && live.listening)) renderDetail();
+    if (summaryOpen) renderLogSummary();
+    else if (row.lead_id === selId && !typing && !(live && live.listening)) renderDetail();
   }).subscribe(status => { if (status === "SUBSCRIBED") setSync("ok", "מסונכרן"); else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") setSync("err", "החיבור החי נפל. רענן את הדף"); });
 }
 // Every change goes to the server about half a second after the last keystroke, at once when a field loses focus,
@@ -197,10 +198,11 @@ function buildFilters(){
   $("#fStatus").innerHTML = `<option value="">כל הסטטוסים</option>` + STATUSES.map(([k, v]) => `<option value="${k}">${v}</option>`).join("");
 }
 ["#q","#fSrc","#fNiche","#fScore","#fStatus","#sort"].forEach(s => $(s).addEventListener("input", renderList));
-function rankKey(l){ const r = rec(l.id); let st = {callback: isDue(r) ? 0 : 4, booked: 1, demo: 1, new: 2, noanswer: 3, done: 6, won: 7, notrelevant: 8, dnc: 9}[r.status] ?? 5;
-  if (l.virtual07 && (r.status === "new" || r.status === "noanswer")) st = 4.5;   // a virtual 07 line rarely reaches the owner: call these last
-  if (l.noDial && ["new", "noanswer", "callback"].includes(r.status)) st = 8.5;   // held until a real number is found
-  else if (l.priority && (r.status === "new" || r.status === "noanswer")) st = -1; // a hand-picked call list (e.g. "חם-27.10") goes first, in its own order
+function rankKey(l){ const r = rec(l.id); let st = {callback: isDue(r) ? 0 : 4, booked: 1, demo: 1, new: 2, noanswer: 3, voicemail: 3, done: 6, won: 7, notrelevant: 8, dnc: 9}[r.status] ?? 5;
+  const open = ["new", "noanswer", "voicemail"].includes(r.status);
+  if (l.virtual07 && open) st = 4.5;   // a virtual 07 line rarely reaches the owner: call these last
+  if (l.noDial && (open || r.status === "callback")) st = 8.5;   // held until a real number is found
+  else if (l.priority && open) st = -1; // a hand-picked call list (e.g. "חם-27.10") goes first, in its own order
   return [st, l.priority || 999, l.src === "g" ? 0 : 1, -(l.score || 0), r.attempts || 0, l.order || 0]; }
 function cmp(a, b){ for (let i = 0; i < a.length; i++){ if (a[i] < b[i]) return -1; if (a[i] > b[i]) return 1; } return 0; }
 function filtered(){
@@ -225,6 +227,7 @@ function renderStats(){
   const due = recs.filter(([, r]) => isDue(r)).length, booked = recs.filter(([, r]) => r.status === "booked").length;
   const demos = recs.filter(([, r]) => r.status === "demo").length, won = recs.filter(([, r]) => r.status === "won").length;
   const stat = (k, v, alert) => `<div class="stat"><span>${k}</span><b class="${alert ? "alert" : ""}">${v}</b></div>`;
+  const nLogs = DATA.reduce((a, l) => a + (rec(l.id).logs || []).length, 0), lsBtn = $("#logsSummary"); if (lsBtn) lsBtn.textContent = "סיכום רישומים" + (nLogs ? ` (${nLogs})` : "");
   $("#stats").innerHTML = stat("לידים", DATA.length) + stat("טופלו", touched) + stat("לחזור עכשיו", due, due > 0) + stat("נקבעו שיחות", booked) + stat("דמו", demos) + stat("סגרו", won) + stat("היכרות (ראשית)", mainDone.length + "/10") + stat("כאב 2–3", pain) + stat("קבעו דמו (ראשית)", demo);
   const el = $("#rule"), n = mainDone.length; el.className = "rule";
   if (n < 10) el.textContent = `כלל ההחלטה אחרי 10 שיחות היכרות בנישה הראשית: ממשיכים אם לפחות 6 עם כאב 2–3 וגם לפחות 3 קבעו דמו. עד עכשיו ${n} שיחות, ${pain} עם כאב, ${demo} קבעו דמו.`;
@@ -288,7 +291,7 @@ function liveHtml(l){
   </section>`;
 }
 function renderDetail(){
-  const l = DATA.find(x => x.id === selId); if (!l) return;
+  const l = DATA.find(x => x.id === selId); if (!l) return; summaryOpen = false;
   const r = rec(l.id), sm = r.summary || {}, b = l.brief || {};
   const dial = dialList(l).map(([p, lbl], i) => l.noDial
     ? `<span class="dialrow"><span class="call off" aria-disabled="true">${esc(p)}</span><span class="lbl">לא לחייג</span></span>`
@@ -348,6 +351,7 @@ function renderDetail(){
       <div class="inline"><button type="button" class="btn sm" id="parseAnswer">מלא את הטופס מהתשובה</button></div>
       <div id="fillPreview"></div>
     </section>
+    <section class="box" id="logBox"><h3>רישום אחרי שיחה</h3>${logHtml(l)}</section>
     <section class="box"><h3>טופס סיכום שיחה</h3>
       <div class="price">${esc(P.text)} את המחיר אומרים רק בסוף, ורק אם עלה כאב ממשי.</div>
       <div class="form">${form}</div>
@@ -355,6 +359,74 @@ function renderDetail(){
     ${scriptBoxes}`;
   renderTranscript(); renderLiveObj();
 }
+// ---------- post-call log: Ofek's six-line template (round 7) ----------
+// Each call is its own dated entry in rec.logs, so a new one never overwrites an earlier one.
+// The entry being written lives in rec.logDraft and is saved while typing, like every other field.
+// Ofek's letters run opposite to the calculator's (his א = repairs), so the form shows words instead.
+const LOG_ROWS = [
+  [["attempt", "ניסיון", "radio", ["1", "2", "3"]], ["kind", "סוג", "radio", ["תיקונים", "פרויקטים"]], ["vm", "הודעה בתא הקולי", "radio", ["אין", "גרסה א (תיקונים)", "גרסה ב (פרויקטים)"]]],
+  [["passed20", "הפתיחה: עבר 20 שניות?", "radio", ["כן", "לא"]], ["cutAt", "אם לא: באיזה משפט נחתך, ומה אמר", "text"]],
+  [["today", "מה קורה היום כשהוא לא עונה (במילים שלו)", "text"], ["missed", "שיחות שמפספס בשבוע", "number"], ["job", "שווי עבודה (רק מה שהוא אמר)", "text"]],
+  [["obj", "ההתנגדות הראשונה (במילים שלו)", "text"], ["reply", "מה עניתי", "text"], ["reaction", "איך הגיב", "text"]],
+  [["demoSent", "דמו: נשלח?", "radio", ["כן", "לא"]], ["demoHeard", "שמע על הקו?", "radio", ["כן", "לא"]], ["quote", "מה אמר עליה (ציטוט)", "text"]],
+  [["nextAt", "הצעד הבא: יום ושעה", "datetime"], ["closed", "או: למה נסגר", "text"], ["change", "מה הייתי משנה בתסריט (משפט אחד)", "text"]]];
+const LOG_FIELDS = LOG_ROWS.flat();
+let summaryOpen = false;
+function logDefaults(l){ const s = rec(l.id).summary || {}; return {kind: kindOf(l) === "B" ? "תיקונים" : "פרויקטים", missed: s.calc_missed || "", job: +s.calc_deal ? ils(+s.calc_deal) : ""}; }
+const logDraftOf = l => ({...logDefaults(l), ...(rec(l.id).logDraft || {})});
+function logHtml(l){
+  const d = logDraftOf(l), logs = (rec(l.id).logs || []).slice().reverse();
+  const field = ([k, label, type, opts]) => { const v = d[k] ?? "", mark = sv(l, "log:" + k);
+    if (type === "radio") return `<div class="f"><span>${label} ${mark}</span><span class="radios" role="radiogroup" aria-label="${label}">${opts.map((o, i) => `<label for="log-${k}-${i}"><input type="radio" id="log-${k}-${i}" name="log-${k}" value="${esc(o)}" ${v === o ? "checked" : ""}> ${esc(o)}</label>`).join("")}</span></div>`;
+    const input = type === "datetime" ? `<input type="datetime-local" id="log-${k}" data-log="${k}" value="${esc(v)}">`
+      : type === "number" ? `<input type="number" inputmode="numeric" min="0" id="log-${k}" data-log="${k}" value="${esc(v)}">`
+      : `<input type="text" id="log-${k}" data-log="${k}" value="${esc(v)}">`;
+    return `<label class="f" for="log-${k}">${label} ${mark}${input}</label>`; };
+  const line = x => `${fmtDT(x.at)} · ניסיון ${esc(x.attempt || "?")}${x.kind ? " · " + esc(x.kind) : ""}${x.passed20 ? " · 20 שניות: " + esc(x.passed20) : ""}${x.demoHeard === "כן" ? " · שמע דמו" : ""}${x.nextAt ? " · המשך " + fmtDT(x.nextAt) : x.closed ? " · נסגר" : ""}`;
+  return `<div class="note">שש שורות, דקה אחרי כל שיחה. כל שיחה נשמרת כרישום נפרד עם תאריך, והטיוטה נשמרת בזמן שכותבים.</div>
+    ${LOG_ROWS.map((row, i) => `<div class="logrow"><span class="lognum">${i + 1}</span><div class="form">${row.map(field).join("")}</div></div>`).join("")}
+    <div class="inline"><button type="button" class="btn sm primary" id="logSave">שמור רישום לשיחה הזו</button>${sv(l, "logSaved")}<span class="note" id="logMsg"></span></div>
+    ${logs.length ? `<div class="loglist"><div class="note">רישומים קודמים (${logs.length})</div>${logs.map(x => `<details class="trd"><summary>${line(x)}</summary><div class="trbody">${LOG_FIELDS.filter(([k]) => x[k]).map(([k, label]) => `<div><span class="k">${label}:</span> ${esc(k === "nextAt" ? fmtDT(x[k]) : x[k])}</div>`).join("")}${x.status ? `<div><span class="k">סטטוס בלוח:</span> ${esc(SLABEL[x.status] || x.status)}</div>` : ""}</div></details>`).join("")}</div>` : ""}`;
+}
+function saveLog(){
+  const l = DATA.find(x => x.id === selId); if (!l) return;
+  const d = logDraftOf(l), defs = logDefaults(l);
+  if (!LOG_FIELDS.some(([k]) => String(d[k] ?? "").trim() && d[k] !== defs[k])){ $("#logMsg").textContent = "הרישום ריק. ממלאים לפחות שורה אחת."; return; }
+  const entry = {id: Date.now().toString(36), at: new Date().toISOString(), by: user.email, status: rec(l.id).status,
+    ...Object.fromEntries(LOG_FIELDS.map(([k]) => [k, String(d[k] ?? "").trim()]).filter(([, v]) => v))};
+  edit(l.id, r => { r.logs = [...(r.logs || []), entry].slice(-60); r.logDraft = {}; }, 0, "logSaved");
+  renderDetail(); renderStats();
+  document.getElementById("logBox")?.scrollIntoView({block: "nearest"});
+}
+// After ten entries the summary answers Ofek's three questions; before that it shows the counts so far.
+const normText = s => String(s || "").replace(/[״"'׳.,!?…]/g, " ").replace(/\s+/g, " ").trim();
+function topCounts(items, n = 5){
+  const m = new Map();
+  for (const t of items){ const k = normText(t); if (!k) continue; const e = m.get(k) || {text: String(t).trim(), n: 0}; e.n++; m.set(k, e); }
+  return [...m.values()].sort((a, b) => b.n - a.n).slice(0, n);
+}
+function renderLogSummary(){
+  summaryOpen = true;
+  const logs = DATA.flatMap(l => (rec(l.id).logs || []).map(x => ({...x, lead: l}))), n = logs.length;
+  const cut = logs.filter(x => x.passed20 === "לא"), passed = logs.filter(x => x.passed20 === "כן");
+  const heard = logs.filter(x => x.demoHeard === "כן"), notHeard = logs.filter(x => x.demoHeard !== "כן");
+  const rate = arr => arr.length ? `${arr.filter(x => x.nextAt).length} מתוך ${arr.length} (${Math.round(100 * arr.filter(x => x.nextAt).length / arr.length)}%)` : "אין עדיין";
+  const counted = (arr, empty) => arr.length ? `<ol class="qs">${arr.map(x => `<li>${esc(x.text)} <b>×${x.n}</b></li>`).join("")}</ol>` : `<div class="note">${empty}</div>`;
+  const changes = logs.filter(x => x.change).sort((a, b) => b.at.localeCompare(a.at)).slice(0, 10);
+  $("#detail").innerHTML = `
+    <button type="button" class="btn sm" id="summaryClose">→ חזרה</button>
+    <h2>סיכום רישומים אחרי שיחה</h2>
+    <div class="meta">${n} רישומים ב-${new Set(logs.map(x => x.lead.id)).size} לידים${n < 10 ? ` · עוד ${10 - n} רישומים עד סיכום מלא. בינתיים זו ספירה בסיסית.` : ""}</div>
+    <div class="facts">${kv("עברו את 20 השניות", `${passed.length} מתוך ${passed.length + cut.length}`)}${kv("קבעו המשך עם יום ושעה", `${logs.filter(x => x.nextAt).length} מתוך ${n}`)}${kv("דמו נשלח", `${logs.filter(x => x.demoSent === "כן").length} מתוך ${n}`)}${kv("הודעה בתא: גרסה א / גרסה ב", `${logs.filter(x => (x.vm || "").startsWith("גרסה א")).length} / ${logs.filter(x => (x.vm || "").startsWith("גרסה ב")).length}`)}</div>
+    <section class="box"><h3>איפה מנתקים: המשפט שבו השיחה נחתכה</h3>${counted(topCounts(cut.map(x => x.cutAt)), "עוד אין רישום של שיחה שנחתכה לפני 20 שניות.")}</section>
+    <section class="box"><h3>ההתנגדויות שחוזרות</h3>${counted(topCounts(logs.map(x => x.obj)), "עוד אין התנגדויות רשומות.")}</section>
+    <section class="box"><h3>מי ששמע את הדמו על הקו, קבע המשך יותר?</h3>
+      <div>שמעו על הקו: קבעו המשך ${rate(heard)}.</div><div>לא שמעו: קבעו המשך ${rate(notHeard)}.</div>
+      ${n < 10 ? `<div class="note">עם פחות מ-10 רישומים זה עוד לא אומר הרבה.</div>` : ""}</section>
+    <section class="box"><h3>מה הייתי משנה בתסריט (האחרונים)</h3>${changes.length ? `<ul class="qs">${changes.map(x => `<li>${esc(x.change)} <span class="note">· ${esc(x.lead.name)}, ${fmtDT(x.at)}</span></li>`).join("")}</ul>` : `<div class="note">עוד אין הצעות.</div>`}</section>`;
+}
+$("#logsSummary")?.addEventListener("click", () => { renderLogSummary(); app.classList.add("showdetail"); $("#detail").scrollTop = 0; });
+
 // ---------- calculator: missed calls a week × average job × close rate = what he loses a month ----------
 // The same inputs appear in the card and inside each script; all copies stay in step and save to the lead's summary.
 const WEEKS = 4.33;
@@ -386,10 +458,12 @@ $("#detail").addEventListener("click", async e => {
   const t = e.target;
   if (t.closest("#back")){ app.classList.remove("showdetail"); return; }
   const st = t.closest("[data-st]");
-  if (st && selId){ const s = st.dataset.st; edit(selId, r => { if (s === "noanswer") r.attempts = (r.attempts || 0) + 1; r.status = s; r.history.push({t: new Date().toISOString(), s}); }); renderList(); renderDetail(); return; }
+  if (st && selId){ const s = st.dataset.st; edit(selId, r => { if (s === "noanswer" || s === "voicemail") r.attempts = (r.attempts || 0) + 1; r.status = s; r.history.push({t: new Date().toISOString(), s}); }); renderList(); renderDetail(); return; }
   if (t.closest("#callStart")){ startCall(true); return; }
   if (t.closest("#callManual")){ startCall(false); return; }
   if (t.closest("#callEnd")){ endCall(); return; }
+  if (t.closest("#logSave")){ saveLog(); return; }
+  if (t.closest("#summaryClose")){ summaryOpen = false; if (selId) renderDetail(); else $("#detail").innerHTML = EMPTY_DETAIL; app.classList.toggle("showdetail", !!selId); return; }
   if (t.closest("#callGoto") && call){ selId = call.id; renderList(); renderDetail(); return; }
   const tf = t.closest("[data-trfill]");
   if (tf && trCache[tf.dataset.trfill]){
@@ -419,6 +493,8 @@ $("#detail").addEventListener("input", e => {
     edit(selId, r => { r.summary[k] = t.value; const n = calcNumsOf(r.summary); if (n.ok) r.summary.calc = `${ils(n.loss)} בחודש (${n.m} שיחות בשבוע × ${n.c}% סגירה × ${ils(n.d)})`; }, k === "calc_type" ? 0 : 600, "s:" + k);
     if (l) refreshCalc(l, t);
   }
+  else if (t.dataset.log) edit(selId, r => { r.logDraft = {...(r.logDraft || {}), [t.dataset.log]: t.value}; }, 600, "log:" + t.dataset.log);
+  else if (t.type === "radio" && t.name.startsWith("log-")) edit(selId, r => { r.logDraft = {...(r.logDraft || {}), [t.name.slice(4)]: t.value}; }, 0, "log:" + t.name.slice(4));
   else if (t.dataset.f) edit(selId, r => { r.summary = {...(r.summary || {}), [t.dataset.f]: t.value}; }, 600, "s:" + t.dataset.f);
   else if (t.type === "radio" && t.name.startsWith("f-")){ edit(selId, r => { r.summary = {...(r.summary || {}), [t.name.slice(2)]: t.value}; }, 0, "s:" + t.name.slice(2)); renderStats(); }
 });
@@ -547,7 +623,7 @@ async function copyPrompt(){
 השדות:
 ${fields}
 
-סטטוסים אפשריים: noanswer, callback (ואז callback = המועד), booked, done, demo (ואז callback = מועד הדמו), won, notrelevant, dnc.
+סטטוסים אפשריים: noanswer, voicemail (השאיר הודעה בתא הקולי), callback (ואז callback = המועד), booked, done, demo (ואז callback = מועד הדמו), won, notrelevant, dnc.
 
 החזר רק JSON בצורה הזו, בלי טקסט נוסף:
 {"summary": {"<key>": "<ערך קצר בעברית>"}, "status": "<אחד מהסטטוסים>", "callback": "YYYY-MM-DDTHH:MM או מחרוזת ריקה", "notes": "2–4 שורות קצרות: מה חשוב לזכור לשיחה הבאה"}
@@ -577,7 +653,7 @@ function parseAnswer(){
 function applyFill(){
   if (!pendingFill || !selId) return; const f = pendingFill;
   edit(selId, r => { r.summary = {...(r.summary || {}), ...f.summary};
-    if (f.status && f.status !== r.status){ if (f.status === "noanswer") r.attempts = (r.attempts || 0) + 1; r.status = f.status; r.history.push({t: new Date().toISOString(), s: f.status}); }
+    if (f.status && f.status !== r.status){ if (f.status === "noanswer" || f.status === "voicemail") r.attempts = (r.attempts || 0) + 1; r.status = f.status; r.history.push({t: new Date().toISOString(), s: f.status}); }
     if (f.callback) r.callback = f.callback;
     if (f.notes) r.notes = (r.notes ? r.notes + "\n" : "") + `[${new Date().toLocaleDateString("he-IL")}] ${f.notes}`; });
   pendingFill = null; renderList(); renderDetail();
