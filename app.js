@@ -705,6 +705,9 @@ function renderTranscript(){ const box = $("#liveTranscript"); if (!box || !live
 const CHUNK_MS = 15000, LATE_MS = 10000, QUIET_RMS = 0.004;
 let suggestOn = (() => { try { return localStorage.getItem("liveSuggest") === "1"; } catch { return false; } })();
 const KEY_TEXT = {OPENAI_API_KEY: "המפתח של OpenAI עוד לא הודבק בשרת, ולכן אין תמלול מדויק", ANTHROPIC_API_KEY: "המפתח של Anthropic עוד לא הודבק בשרת, ולכן אין הצעות"};
+// The functions check that the login is still alive on the server (the database only checks the token), so a login
+// ended elsewhere, for example by a password change, shows up here first.
+const RELOGIN = "הכניסה ללוח פגה בשרת. צריך לרענן את הדף ולהתחבר מחדש.";
 async function callFn(name, body, ms){
   const {data} = await sb.auth.getSession(), token = data.session && data.session.access_token;
   if (!token) return {error: "auth"};
@@ -768,7 +771,7 @@ async function sendChunk(c, ch, blob, t0, final){
   const res = await p; ch.pending.delete(p); if (asking) ch.busy = false;
   if (mode === "audio" && res.text) ch.texts.push({t: t0, text: res.text});
   if (res.error === "missing_key"){ if (res.key === "OPENAI_API_KEY") ch.mode = "text"; ch.msg = KEY_TEXT[res.key] + (res.key === "OPENAI_API_KEY" ? ". ההצעות יעבדו מהתמלול של Chrome." : "."); }
-  else if (res.error === "auth" || res.error === "not_member") ch.msg = "השרת לא זיהה את המשתמש. רענן את הדף.";
+  else if (res.error === "auth" || res.error === "not_member") ch.msg = RELOGIN;
   else if (res.error && !final) ch.msg = "השרת לא ענה הפעם. ממשיך לנסות כל רבע דקה.";
   else if (!res.error) ch.msg = "";
   if (res.say && !final && Date.now() - sent <= LATE_MS) ch.items.push({t: sent, s: Math.round((sent - c.start) / 1000), say: res.say, tag: res.tag || ""});
@@ -809,7 +812,8 @@ async function transcribeRecording(id, btn){
   btn.disabled = true; btn.textContent = "מתמלל…";
   const res = await callFn("transcribe", {path, at: a.at, dur: a.dur}, 150000);
   if (!res.id){ btn.disabled = false;
-    btn.textContent = res.error === "missing_key" ? "המפתח של OpenAI עוד לא הודבק בשרת" : res.detail === "too_long" ? "ההקלטה ארוכה מדי לתמלול אחד" : "התמלול נכשל. נסה שוב"; return; }
+    btn.textContent = res.error === "missing_key" ? "המפתח של OpenAI עוד לא הודבק בשרת" : res.error === "auth" || res.error === "not_member" ? RELOGIN
+      : res.detail === "too_long" ? "ההקלטה ארוכה מדי לתמלול אחד" : "התמלול נכשל. נסה שוב"; return; }
   delete trCache[res.id];
   edit(id, r => { r.calls = (r.calls || []).map(x => x.audio && x.audio.path === path ? {...x, audio: {...x.audio, atr: res.id}} : x); });
   if (id === selId && !summaryOpen) renderDetail();
