@@ -4,14 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src https://tcxflzcmxsfefxorcdov.supabase.co wss://tcxflzcmxsfefxorcdov.supabase.co; media-src https://tcxflzcmxsfefxorcdov.supabase.co blob:; img-src 'self' data:; base-uri 'none'; form-action 'none'; object-src 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src https://tcxflzcmxsfefxorcdov.supabase.co wss://tcxflzcmxsfefxorcdov.supabase.co http://127.0.0.1:8178; media-src https://tcxflzcmxsfefxorcdov.supabase.co blob:; img-src 'self' data:; base-uri 'none'; form-action 'none'; object-src 'none'">
 <meta name="referrer" content="no-referrer">
 <title>לוח שיחות</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Hebrew:wght@400;500;600;700&family=Suez+One&family=IBM+Plex+Mono:wght@500;600&display=swap">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/dist/umd/supabase.js" integrity="sha384-BWcjm9OdFth9TbhCxZPdm+gAOUMAzQy9nmTs12ioXdCcbVnJaPMn+fMUoQCLt60R" crossorigin="anonymous"></script>
-<script src="config.js?v=2026-10-27q"></script>
+<script src="config.js?v=2026-10-27r"></script>
 <style>
 /* Layout: a two-pane call sheet. The call queue sits on the start side, the open lead's call card beside it; the live call panel sits at the top of the card. One column on phones. */
 :root{
@@ -146,6 +146,14 @@ header.top{padding-block:12px 10px;display:grid;gap:10px;border-bottom:1px solid
 /* after the call: what the board filled by itself */
 .donecard{display:grid;gap:4px;padding:10px 12px;border-radius:10px;background:var(--ok-bg);color:var(--ok-ink)}
 .donecard .note{color:inherit;opacity:.85}
+.wa-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.btn.wabtn{background:#25d366;color:#08311a;border-color:transparent;font-weight:600;text-decoration:none}
+.wa-box{display:grid;gap:6px;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--sunk)}
+.wa-box textarea{min-height:110px}
+.sttline{font-size:13px;padding:6px 10px;border-radius:8px;background:var(--sunk);color:var(--muted)}
+.sttline.running{background:var(--info-bg);color:var(--info-ink)}
+.sttline.done{background:var(--ok-bg);color:var(--ok-ink)}
+.sttline.error{background:var(--warn-bg);color:var(--warn-ink)}
 .known .knownhead{display:flex;justify-content:space-between;align-items:center;gap:8px}
 .statusrow{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .kv.auto{border-color:var(--call)}
@@ -296,7 +304,7 @@ details.script summary{cursor:pointer;font-weight:600}
   </section>
 </div>
 
-<script src="engine.js?v=2026-10-27q"></script>
-<script src="app.js?v=2026-10-27q"></script>
+<script src="engine.js?v=2026-10-27r"></script>
+<script src="app.js?v=2026-10-27r"></script>
 </body>
 </html>

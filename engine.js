@@ -459,7 +459,7 @@ function extract({lines = [], model = null, kind = "B", objections = [], dur = 0
   else if (when) status = "callback";
   else if (heardFrom(SIGNALS.no) && !SIGNALS.demo.test(text)) status = "notrelevant";
   else if (heardFrom(SIGNALS.back) && dur < 90) status = "callback";
-  else if (words >= 30 || dur >= 60) status = "done";
+  else if (words >= 10 || dur >= 60) status = "done";   // a short real exchange is still a conversation
   else status = "noanswer";
   if (status === "noanswer" || status === "voicemail"){ for (const k of Object.keys(sm)) delete sm[k]; for (const k of Object.keys(calc)) delete calc[k]; for (const k of Object.keys(log)) delete log[k]; }
   if (status === "demo"){ put("demo", "כן, נקבע מועד"); put("demoDate", when); }

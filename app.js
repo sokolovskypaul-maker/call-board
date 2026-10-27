@@ -252,7 +252,7 @@ function renderList(){
     const badge = l.src === "g" ? `<span class="sc s${l.score}" title="ציון התאמה ${l.score}">${l.score}</span>` : `<span class="sc fb" title="פייסבוק">FB</span>`;
     const when = isDue(r) ? ` · <span class="due">לחזור עכשיו</span>` : (["callback", "booked", "demo"].includes(r.status) && r.callback ? ` · ${fmtDT(r.callback)}` : "");
     const tagPills = (l.tags || []).map(t => `<span class="tag">${esc(t)}${l.priority ? " · " + l.priority : ""}</span> `).join("");
-    const flags = (l.noDial ? ` · <span class="flag">לא לחייג</span>` : "") + (l.phoneMismatch ? ` · <span class="flag">מספר מהאתר</span>` : "") + (l.virtual07 ? ` · <span class="flag dim">07</span>` : "");
+    const flags = (l.noDial ? ` · <span class="flag">לא לחייג</span>` : "") + (l.phoneMismatch ? ` · <span class="flag">מספר מהאתר</span>` : "") + (l.virtual07 ? ` · <span class="flag dim">07</span>` : "") + ((sttState.get(l.id) || {}).state === "running" ? ` · <span class="flag dim">מתמלל…</span>` : "");
     return `<button type="button" role="listitem" class="row ${l.id === selId ? "sel" : ""}" data-id="${esc(l.id)}">${badge}<span style="min-width:0"><span class="nm">${esc(l.name)}</span><span class="sub">${tagPills}${esc(l.niche)}${l.brief?.owner ? " · " + esc(l.brief.owner) : ""} · ${esc(l.area || "אזור לא ידוע")}${flags}${when}</span></span><span class="pill st-${r.status}">${SLABEL[r.status] || ""}${r.attempts ? ` ×${r.attempts}` : ""}</span></button>`;
   }).join("") : (DATA.length ? `<div class="empty"><b>אין תוצאות</b>נסה לנקות את החיפוש או את הסינון.</div>` : "");
   renderStats();
@@ -313,6 +313,7 @@ function liveHtml(l){
   if (!on) return `<section class="callbar" id="callbar">
     ${call ? `<div class="inline"><span class="note">יש שיחה פתוחה עם ${esc(DATA.find(x => x.id === call.id)?.name || "")}. שיחה חדשה כאן תסגור ותשמור אותה.</span><button type="button" class="btn sm" id="callGoto">חזור אליה</button></div>` : ""}
     <div class="inline"><button type="button" class="btn primary big" id="callStart">🎙 התחל שיחה</button><button type="button" class="linkbtn" id="callManual">שיחה בלי הקלטה</button></div>
+    ${waHtml(l)}
     <div class="note">האייפון על רמקול ליד המחשב. בסוף השיחה הכל נשמר וממולא לבד. <b>לומר לצד השני שהשיחה מוקלטת.</b></div>
     ${PAID_ENGINE ? suggestSwitch() : ""}
     <div class="msg hidden" id="liveMsg"></div></section>`;
@@ -333,11 +334,40 @@ function liveHtml(l){
     <div class="msg hidden" id="liveMsg"></div></section>`;
 }
 // After a call: what the board did by itself, with a way to undo it.
+// ---------- the WhatsApp follow-up ----------
+// "💬 וואטסאפ המשך" opens a wa.me chat with the lead's mobile number and a short warm message (editable first), with the link
+// to the site's page for his niche. Paul presses send in WhatsApp himself: the board sends nothing, it only notes the date.
+// No prices and no promises about WhatsApp or Instagram in the message, as the site's rules say.
+const SITE = "https://neverbusyline.com/";
+const WA_PAGES = [[/מספר|ברבר/, "barbers/", "מספרות"], [/מוסכ/, "garages/", "מוסכים"], [/הובל/, "movers/", "חברות הובלה"], [/תיווך/, "real-estate/", "משרדי תיווך"],
+  [/מוני/, "taxi/", "תחנות מוניות"], [/מגרש/, "car-dealers/", "מגרשי רכב"], [/מנעול/, "trades/", "מנעולנים"], [/אינסטל/, "trades/", "אינסטלטורים"], [/תריס/, "trades/", "עסקי תריסים"]];
+const waOpen = new Set();   // leads whose message box is open
+// A mobile number only (05X), as 9725XXXXXXXX: a landline or a virtual 07 line has no WhatsApp.
+function waNumber(l){
+  if (l.noDial) return "";
+  for (const [p] of dialList(l)){ let d = String(p).replace(/\D/g, ""); if (d.startsWith("972")) d = d.slice(3); if (d.startsWith("0")) d = d.slice(1); if (/^5\d{8}$/.test(d)) return "972" + d; }
+  return "";
+}
+function waMessage(l){
+  const p = WA_PAGES.find(([re]) => re.test(l.niche || "")), url = `${SITE}${p ? p[1] : ""}?utm_source=whatsapp&utm_medium=followup`;
+  const name = String((l.brief && l.brief.owner) || "").trim().split(/\s+/)[0] || shortName(l.name).replace(/\s*\(.*?\)/g, "").trim();
+  return `היי ${name}, כאן פול מהמשרד האחורי 🙂\nבהמשך לשיחה שלנו, היה נעים להכיר!\nכאן אפשר לראות איך זה עובד${p ? ` אצל ${p[2]}` : ""}:\n${url}\nאם יש שאלה, אני כאן. פול`;
+}
+const waLink = (num, text) => `https://wa.me/${num}?text=${encodeURIComponent(text)}`;
+function waHtml(l){
+  const r = rec(l.id), num = waNumber(l), a = r.lastAuto, last = (r.wa || []).slice(-1)[0];
+  if (!num) return `<div class="wa-row"><button type="button" class="linkbtn" disabled>💬 וואטסאפ המשך</button><span class="note">${l.noDial ? "המספר לא לחיוג" : "אין מספר נייד, ולכן אין וואטסאפ"}</span></div>`;
+  const fresh = a && !a.hidden && Date.now() - new Date(a.at).getTime() < 12 * 3600000 && !(last && last.at > a.at);   // right after a call it stands out
+  const text = r.waDraft || waMessage(l), open = waOpen.has(l.id);
+  return `<div class="wa-row"><button type="button" class="${fresh ? "btn sm wabtn" : "linkbtn"}" id="waOpen" aria-expanded="${open}">💬 וואטסאפ המשך</button>${last ? `<span class="note">💬 נשלח קישור וואטסאפ · ${fmtDT(last.at)}</span>` : ""}</div>
+    ${open ? `<div class="wa-box"><label for="waText" class="note">ההודעה. אפשר לערוך לפני הפתיחה ${sv(l, "waDraft")}</label><textarea id="waText" rows="5">${esc(text)}</textarea>
+      <div class="inline"><a class="btn sm wabtn" id="waGo" href="${esc(waLink(num, text))}" target="_blank" rel="noopener noreferrer">פתח בוואטסאפ ←</a><span class="note">נפתח צ'אט עם ${esc(num.replace(/^972/, "0"))}. את השליחה עצמה עושים בוואטסאפ.</span></div></div>` : ""}`;
+}
 function doneCard(l){
   const r = rec(l.id), a = r.lastAuto; if (!a || a.hidden || Date.now() - new Date(a.at).getTime() > 12 * 3600000) return "";
   const head = a.status ? `הסטטוס עודכן ל"${esc(SLABEL[a.status] || a.status)}"${a.callback ? `, ${fmtDT(a.callback)}` : ""}` : "הסטטוס נשאר כמו שהיה";
   const filled = (a.keys || []).filter(k => SHORT[k]).map(k => SHORT[k]);
-  return `<div class="donecard" role="status"><div><b>✓ ${a.source === "transcript" ? "מולא מהתמלול" : "השיחה נשמרה ומולאה לבד"}.</b> ${head}.</div>
+  return `<div class="donecard" role="status"><div><b>✓ ${a.source === "transcript" ? "מולא מהתמלול" : "השיחה נשמרה ומולאה לבד"}${a.accurate ? ", ועודכן מהתמלול המדויק" : ""}.</b> ${head}.</div>
     <div class="note">${filled.length ? `מולאו ${filled.length} פרטים: ${esc(filled.join(", "))}. הם מסומנים ✦.` : "לא זיהיתי בתמלול פרטים למילוי, אז השדות נשארו ריקים."}${a.logId ? " נוסף רישום אחרי שיחה." : ""}</div>
     <div class="inline"><button type="button" class="linkbtn" id="autoUndo">בטל את המילוי</button><button type="button" class="linkbtn" id="autoHide">הסתר</button></div></div>`;
 }
@@ -348,7 +378,7 @@ function knownHtml(l){
   const showCb = ["callback", "booked", "demo"].includes(r.status) || r.callback;
   return `<section class="box known" id="knownBox">
     <div class="knownhead"><h3>מה ידוע עליו</h3><button type="button" class="btn sm" id="editToggle" aria-expanded="${open}">${open ? "סגור עריכה" : "✎ עריכה"}</button></div>
-    ${doneCard(l)}
+    ${doneCard(l)}${sttHtml(l.id)}
     <div class="statusrow"><label for="f-status" class="note">סטטוס</label><select id="f-status">${STATUSES.map(([k, v]) => `<option value="${k}" ${r.status === k ? "selected" : ""}>${v}</option>`).join("")}</select>${sv(l, "status")}
       ${showCb ? `<label for="f-callback" class="note">מועד</label><input type="datetime-local" id="f-callback" value="${esc(r.callback || "")}">${sv(l, "callback")}` : ""}
       ${r.attempts ? `<span class="note">ניסיונות: ${r.attempts}</span>` : ""}</div>
@@ -385,7 +415,7 @@ function historyHtml(l){
     ${recs.length ? `<div class="trlog"><div class="note">הקלטות</div>${recs.map(x => recRow(audioMeta(r, x.audio.path))).join("")}</div>` : ""}
     ${trs.length ? `<div class="trlog"><div class="note">תמלולים</div>${trs.map(x => `<details class="trd" data-tr="${esc(x.tr)}"><summary>${fmtDT(x.at)} · ${call && call.trId === x.tr ? "בשיחה עכשיו" : x.dur ? fmt(x.dur * 1000) + " דקות" : "השיחה נקטעה"}</summary><div class="trbody">טוען…</div></details>`).join("")}</div>` : ""}
     ${logs.length ? `<div class="loglist"><div class="note">רישומים אחרי שיחה (${logs.length})</div>${logs.map(x => `<details class="trd"><summary>${line(x)}</summary><div class="trbody">${LOG_FIELDS.filter(([k]) => x[k]).map(([k, label]) => `<div><span class="k">${label}:</span> ${esc(k === "nextAt" ? fmtDT(x[k]) : x[k])}</div>`).join("")}${x.status ? `<div><span class="k">סטטוס בלוח:</span> ${esc(SLABEL[x.status] || x.status)}</div>` : ""}${x.audio ? recRow(audioMeta(r, x.audio)) : ""}</div></details>`).join("")}</div>` : ""}
-    ${hist.length ? `<div class="note">שינויי סטטוס</div><ul class="hist">${hist.map(h => `<li>${fmtDT(h.t)}: ${esc(SLABEL[h.s] || h.s)}${h.auto ? " (אוטומטי)" : h.undo ? " (בוטל מילוי)" : ""}</li>`).join("")}</ul>` : ""}
+    ${hist.length ? `<div class="note">שינויי סטטוס</div><ul class="hist">${hist.map(h => `<li>${fmtDT(h.t)}: ${h.wa ? "💬 נשלח קישור וואטסאפ" : esc(SLABEL[h.s] || h.s)}${h.auto ? " (אוטומטי)" : h.undo ? " (בוטל מילוי)" : ""}</li>`).join("")}</ul>` : ""}
   </div></details>`;
 }
 function renderDetail(){
@@ -523,6 +553,7 @@ $("#detail").addEventListener("click", async e => {
   if (dl){ const url = await signedUrl(dl.dataset.dl, true); if (!url){ dl.textContent = "לא נמצא"; return; } const a = document.createElement("a"); a.href = url; a.rel = "noopener"; document.body.appendChild(a); a.click(); a.remove(); return; }
   const stt = t.closest("[data-stt]");
   if (stt && selId && !stt.disabled){ transcribeRecording(selId, stt); return; }
+  const mac = t.closest("[data-mac]"); if (mac && selId && !mac.disabled){ transcribeOnMac(selId, mac.dataset.mac, mac); return; }
   if (t.closest("#summaryClose")){ summaryOpen = false; if (selId) renderDetail(); else $("#detail").innerHTML = EMPTY_DETAIL; app.classList.toggle("showdetail", !!selId); return; }
   if (t.closest("#callGoto") && call){ selId = call.id; renderList(); renderDetail(); return; }
   const tf = t.closest("[data-trfill]");
@@ -537,6 +568,15 @@ $("#detail").addEventListener("click", async e => {
   if (t.closest("#objClose") && call){ call.view.obj = null; renderCockpit(); return; }
   // after the call
   if (t.closest("#editToggle") && selId){ editOpen.has(selId) ? editOpen.delete(selId) : editOpen.add(selId); renderDetail(); return; }
+  if (t.closest("#waOpen") && selId){ waOpen.has(selId) ? waOpen.delete(selId) : waOpen.add(selId); renderDetail(); return; }
+  if (t.closest("#waGo") && selId){
+    e.preventDefault();
+    const l = DATA.find(x => x.id === selId), num = l && waNumber(l), text = ($("#waText")?.value || "").trim(); if (!num || !text) return;
+    window.open(waLink(num, text), "_blank", "noopener,noreferrer");
+    const at = new Date().toISOString();
+    edit(selId, r => { r.wa = [...(r.wa || []), {at, by: user.email}].slice(-20); r.waDraft = ""; r.history = [...(r.history || []), {t: at, s: r.status, wa: true}]; }, 0, "wa");
+    waOpen.delete(selId); renderDetail(); return;
+  }
   if (t.closest("#autoUndo") && selId){ undoAuto(selId); return; }
   if (t.closest("#autoHide") && selId){ edit(selId, r => { if (r.lastAuto) r.lastAuto = {...r.lastAuto, hidden: true}; }); renderDetail(); return; }
   if (t.closest("#logNew") && selId){ newLog(DATA.find(x => x.id === selId), false); return; }
@@ -551,7 +591,7 @@ function setStatus(id, s){
   edit(id, r => { if (s === "noanswer" || s === "voicemail") r.attempts = (r.attempts || 0) + 1; r.status = s; r.history.push({t: new Date().toISOString(), s}); }, 0, "status");
   renderList(); renderDetail();
 }
-const editLogField = (id, logId, k, v, debounce) => edit(id, r => { r.logs = (r.logs || []).map(x => x.id === logId ? {...x, [k]: v} : x); }, debounce, "log:" + k);
+const editLogField = (id, logId, k, v, debounce) => edit(id, r => { r.logs = (r.logs || []).map(x => x.id === logId ? {...x, [k]: v, mine: [...new Set([...(x.mine || []), k])]} : x); }, debounce, "log:" + k);
 $("#detail").addEventListener("input", e => {
   const t = e.target; if (!selId) return;
   if (t.id === "suggestToggle") setSuggest(t.checked);
@@ -560,6 +600,8 @@ $("#detail").addEventListener("input", e => {
   else if (t.id === "logPick"){ editLog[selId] = t.value; renderDetail(); }
   else if (t.id === "f-transcript") edit(selId, r => { r.callText = t.value; }, 600, "callText");
   else if (t.id === "f-notes") edit(selId, r => { r.notes = t.value; }, 600, "notes");
+  else if (t.id === "waText"){ edit(selId, r => { r.waDraft = t.value; }, 600, "waDraft");
+    const l = DATA.find(x => x.id === selId), go = $("#waGo"); if (l && go) go.href = waLink(waNumber(l), t.value.trim()); }
   else if (t.id === "f-callback"){ edit(selId, r => { r.callback = t.value; }, 0, "callback"); renderList(); }
   else if (t.classList.contains("calc-in")){
     const l = DATA.find(x => x.id === selId), k = t.dataset.k;
@@ -614,7 +656,7 @@ function endCall(){
   // The card fills itself from what was heard, but only after a listened call with a working microphone:
   // a call without listening says nothing about whether he answered.
   if (c.listened && srOk) autoFill(c, lines);
-  c.entryAt = entry.at; recP.then(blob => { if (blob) uploadRecording(c, blob); });
+  c.entryAt = entry.at; recP.then(blob => { if (!blob) return; uploadRecording(c, blob); accurateTranscript(c, blob); });
   chP.then(ch => { if (ch) finishChunks(c, ch); });
   if (keep && lines.length) saveTr(c, lines, "final").then(ok => { if (ok) return;
     const text = d ? trText(d) : ""; if (text) edit(c.id, r => { r.callText = (r.callText ? r.callText + "\n\n" : "") + text; }, 0, "callText");
@@ -751,12 +793,15 @@ function autoFill(c, lines){
   const l = DATA.find(x => x.id === c.id); if (!l) return;
   const res = Engine.extract({lines: lines.map(x => ({s: Math.max(0, Math.round((x.t - c.start) / 1000)), x: x.text})), model: c.model, kind: kindOf(l),
     objections: [...c.objections], dur: Math.round((c.end - c.start) / 1000), now: new Date(c.end), prevLogs: (rec(c.id).logs || []).length});
-  c.logId = applyAuto(l, res, {source: "call", trId: lines.length ? c.trId : ""});
+  c.logId = applyAuto(l, res, {source: "call", trId: c.trId}).logId;
 }
+// meta.source: "call" (Chrome's live text, right after the call), "accurate" (the Mac's transcript of the same call, minutes
+// later: it refines the same fill and the same log entry, and one "בטל את המילוי" undoes both), or "transcript" (typed or old).
 function applyAuto(l, res, meta){
   const at = new Date().toISOString(), logId = meta.source === "call" ? Date.now().toString(36) : "";
+  let keys = [];
   edit(l.id, r => {
-    const sm = r.summary = r.summary || {}, autoK = new Set(r.autoKeys || []), keys = [];
+    const sm = r.summary = r.summary || {}, autoK = new Set(r.autoKeys || []);
     const prev = {status: r.status || "new", callback: r.callback || "", attempts: r.attempts || 0, summary: {}};
     const put = (k, v) => { const cur = String(sm[k] ?? "").trim(); if ((cur && !autoK.has(k)) || cur === v) return; prev.summary[k] = sm[k] ?? null; sm[k] = v; autoK.add(k); keys.push(k); };
     for (const [k, v] of Object.entries({...res.summary, ...res.calc})) put(k, v);
@@ -775,10 +820,21 @@ function applyAuto(l, res, meta){
       if (draftLeft(r)){ r.logs = [...(r.logs || []), {id: logId + "d", at, by: user.email, status: prev.status, ...Object.fromEntries(Object.entries(r.logDraft).filter(([, v]) => String(v ?? "").trim()))}]; r.logDraft = {}; }
       r.logs = [...(r.logs || []), {id: logId, at, by: user.email, status: r.status, auto: true, ...res.log, ...(meta.trId ? {tr: meta.trId} : {})}].slice(-60);
     }
+    // The accurate text replaces what Chrome's text put in the call's log entry; a line Paul typed there himself ("mine") stays.
+    if (meta.logId) r.logs = (r.logs || []).map(x => { if (x.id !== meta.logId) return x;
+      const y = {...x, status: r.status};
+      for (const k of ["passed20", "cutAt", "today", "missed", "job", "obj", "reaction", "demoSent", "demoHeard", "quote", "nextAt", "closed"]){
+        if ((x.mine || []).includes(k)) continue; if (res.log[k]) y[k] = res.log[k]; else delete y[k]; }
+      return y; });
     r.autoKeys = [...autoK].slice(-60);
-    r.lastAuto = {at, source: meta.source, status: to, callback: to === "demo" || to === "callback" ? r.callback : "", keys, logId, prev};
+    const a = r.lastAuto, same = meta.source === "accurate" && a && meta.trId && a.tr === meta.trId;
+    // Chrome heard too little and called it "לא ענה", but the recording shows a conversation: that attempt did not count
+    if (same && ["noanswer", "voicemail"].includes(a.status) && to && !["noanswer", "voicemail"].includes(to)) r.attempts = a.prev.attempts;
+    r.lastAuto = same
+      ? {...a, at, accurate: true, keys: [...new Set([...a.keys, ...keys])], status: to || a.status, callback: to === "demo" || to === "callback" ? r.callback : a.callback, prev: {...a.prev, summary: {...prev.summary, ...a.prev.summary}}}
+      : {at, source: meta.source, status: to, callback: to === "demo" || to === "callback" ? r.callback : "", keys, logId, prev, tr: meta.trId || "", accurate: meta.source === "accurate"};
   }, 0, "auto");
-  return logId;
+  return {logId, filled: keys.length};
 }
 function undoAuto(id){
   edit(id, r => { const a = r.lastAuto; if (!a) return; const sm = r.summary || {}, autoK = new Set(r.autoKeys || []);
@@ -803,6 +859,78 @@ function fillFromText(id){
   const lines = text.split(/\n+/).filter(x => !/^(שיחה עם|תאריך|שלבים שזוהו|התנגדויות שעלו|תמלול)/.test(x)).map(x => x.replace(/^\[\d+:\d+\]\s*/, "").trim()).filter(Boolean).map((x, i) => ({s: i * 10, x}));
   applyAuto(l, Engine.extract({lines, model: modelFor(l), kind: kindOf(l), dur: lines.length * 10, now: new Date(), prevLogs: (rec(id).logs || []).length}), {source: "transcript"});
   renderList(); renderDetail();
+}
+
+// ---------- the accurate transcript, from the transcriber on this Mac (Whisper, free) ----------
+// At the end of a recorded call the recording goes to the local transcriber (127.0.0.1:8178, contract in transcribe-api.md),
+// if Paul started it. Its text becomes the call's accurate transcript ("audio" in the call's transcript row), and the
+// automatic fill runs again on it. It takes about 0.8 of the call's length and runs in the background: Paul can leave the
+// card and keep calling. If the transcriber is off, nothing else changes and the card says how to start it.
+// An older recording can be sent too, through a short-lived signed link ("תמלל במק" beside the recording).
+const LOCAL_STT = "http://127.0.0.1:8178";
+const sttState = new Map();   // lead id -> {state: "running" | "off" | "done" | "error", est, filled, msg}
+const STT_ERR = {too_big: "ההקלטה גדולה מדי לתמלול", decode_failed: "קובץ ההקלטה לא נקרא", fetch_failed: "הקישור להקלטה פג. נסה שוב",
+  timeout: "התמלול לקח יותר מדי זמן", offline: "המתמלל במק הפסיק לענות", saved: "התמלול לא נשמר בשרת. הוא נמצא ב\"עריכה\", בתיבה \"מה היה בשיחה\""};
+async function sttAlive(){ try { const r = await fetch(LOCAL_STT + "/health", {signal: AbortSignal.timeout(1500)}); return r.ok && !!(await r.json()).ok; } catch { return false; } }
+async function sttPost(body, type){
+  try {
+    const r = await fetch(LOCAL_STT + "/transcribe", {method: "POST", body, headers: {"Content-Type": type}, signal: AbortSignal.timeout(20 * 60000)});
+    const j = await r.json().catch(() => ({})); return r.ok ? j : {error: j.error || "http_" + r.status};
+  } catch (e){ return {error: e && e.name === "TimeoutError" ? "timeout" : "offline"}; }
+}
+function sttHtml(id){
+  const s = sttState.get(id); if (!s) return `<div id="sttLine" hidden></div>`;
+  const text = s.state === "running" ? `⏳ מתמלל את ההקלטה במק${s.est ? `, בערך ${s.est} דק׳` : ""}. אפשר להמשיך לעבוד, והפרטים יתעדכנו לבד.`
+    : s.state === "off" ? "התמלול לא פעיל. להפעלה: start-transcriber"
+    : s.state === "done" ? (s.empty ? "✓ המתמלל במק לא שמע דיבור בהקלטה." : `✓ תמלול מדויק מהמק נשמר${s.filled ? `, ומולאו ממנו ${s.filled} פרטים` : ""}.`)
+    : `התמלול המדויק נכשל: ${s.msg}. ההקלטה שמורה, ואפשר לתמלל אותה שוב מ"שיחות קודמות".`;
+  return `<div id="sttLine" class="sttline ${s.state}" role="status">${esc(text)}</div>`;
+}
+// The card shows the change at once; the whole card is redrawn only when Paul is not typing in it and not in a call there.
+function setStt(id, s){
+  sttState.set(id, s); renderList();
+  if (id !== selId || summaryOpen || (call && call.id === id)) return;
+  const typing = document.activeElement && $("#detail").contains(document.activeElement) && /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName);
+  if (s.state === "done" && !typing) renderDetail(); else { const el = $("#sttLine"); if (el) el.outerHTML = sttHtml(id); }
+}
+async function accurateTranscript(c, blob){
+  if (readOnly) return;
+  if (!(await sttAlive())){ setStt(c.id, {state: "off"}); return; }
+  setStt(c.id, {state: "running", est: Math.max(1, Math.round((c.end - c.start) * 0.8 / 60000))});
+  let res = await sttPost(blob, blob.type || "audio/webm");
+  if (res.error === "failed") res = await sttPost(blob, blob.type || "audio/webm");   // a hiccup on the server: one more try
+  if (!res.lines){ setStt(c.id, {state: "error", msg: STT_ERR[res.error] || "תקלה במתמלל"}); return; }
+  await saveAccurate(c, res.lines);
+}
+// An older recording: the transcriber fetches it itself through a signed link to the private bucket.
+async function transcribeOnMac(id, path, btn){
+  const r = rec(id), x = (r.calls || []).find(x => x.audio && x.audio.path === path); if (!x) return;
+  btn.disabled = true; btn.textContent = "בודק את המתמלל…";
+  if (!(await sttAlive())){ btn.disabled = false; btn.textContent = "תמלל במק"; setStt(id, {state: "off"}); return; }
+  const url = await signedUrl(path); if (!url){ btn.disabled = false; btn.textContent = "ההקלטה לא נמצאה"; return; }
+  const start = new Date(x.audio.at || x.at).getTime(), l = DATA.find(y => y.id === id);
+  const c = {id, start, end: start + (x.audio.dur || x.dur || 0) * 1000, trId: x.tr || `${id}__${start}`, entryAt: x.at, objections: new Set(x.objections || []), model: l ? modelFor(l) : null, done: new Set()};
+  setStt(id, {state: "running", est: Math.max(1, Math.round((c.end - c.start) * 0.8 / 60000))});
+  let res = await sttPost(JSON.stringify({url}), "application/json");
+  if (res.error === "failed") res = await sttPost(JSON.stringify({url: await signedUrl(path) || url}), "application/json");
+  if (!res.lines){ setStt(id, {state: "error", msg: STT_ERR[res.error] || "תקלה במתמלל"}); return; }
+  await saveAccurate(c, res.lines);
+}
+async function saveAccurate(c, lines){
+  const l = DATA.find(x => x.id === c.id); if (!l) return;
+  if (!lines.length){ setStt(c.id, {state: "done", empty: true}); return; }
+  // the call's transcript row: Chrome's live lines stay, the accurate ones go beside them as "audio"
+  let base = trCache[c.trId];
+  if (!base){ try { const {data} = await sb.from("transcripts").select("data").eq("id", c.trId).maybeSingle(); base = data && data.data; } catch {} }
+  const d = {...(base || trDoc(c, [], "final")), audio: lines, status: "final", accurate: "mac"}; trCache[c.trId] = d;
+  let error = null;
+  try { ({error} = await sb.from("transcripts").upsert({id: c.trId, lead_id: c.id, data: d, updated_at: new Date().toISOString(), updated_by: user.id})); } catch (e){ error = e; }
+  edit(c.id, r => { r.calls = (r.calls || []).map(x => x.at === c.entryAt ? {...x, tr: c.trId, accurate: true} : x);
+    if (error) r.callText = (r.callText ? r.callText + "\n\n" : "") + trText(d); }, 0, error ? "callText" : "");
+  const res = Engine.extract({lines, model: c.model || modelFor(l), kind: kindOf(l), objections: [...(c.objections || [])],
+    dur: Math.round((c.end - c.start) / 1000), now: new Date(c.end || Date.now()), prevLogs: Math.max(0, (rec(c.id).logs || []).length - 1)});
+  const {filled} = applyAuto(l, res, {source: "accurate", trId: c.trId, logId: c.logId || ""});
+  setStt(c.id, error ? {state: "error", msg: STT_ERR.saved} : {state: "done", filled});
 }
 addEventListener("pagehide", () => stopListening());   // never leave the microphone listening behind a closed page
 
@@ -880,9 +1008,9 @@ async function uploadRecording(c, blob){
 }
 // A recording's accurate transcript: "atr" points to its row in "transcripts". A call whose transcript was made live
 // (the suggestions switch was on) already has one, so its row offers no button.
-const audioMeta = (r, path) => { const x = (r.calls || []).find(x => x.audio && x.audio.path === path); return x ? {...x.audio, liveAudio: !!x.liveAudio} : {path}; };
+const audioMeta = (r, path) => { const x = (r.calls || []).find(x => x.audio && x.audio.path === path); return x ? {...x.audio, liveAudio: !!x.liveAudio, accurate: !!x.accurate} : {path}; };
 const recRow = a => `<div class="recrow"><span>${a.at ? fmtDT(a.at) : "הקלטה"}${a.dur ? " · " + fmt(a.dur * 1000) : ""}</span><button type="button" class="btn sm" data-play="${esc(a.path)}">▶ נגן</button><button type="button" class="btn sm" data-dl="${esc(a.path)}">הורד</button>`
-  + (a.atr ? "" : a.liveAudio ? `<span class="note">תומלל בזמן השיחה ✓</span>` : PAID_ENGINE ? `<button type="button" class="btn sm" data-stt="${esc(a.path)}">תמלל מההקלטה</button>` : "")
+  + (a.atr ? "" : a.accurate ? `<span class="note">תמלול מדויק מהמק ✓</span>` : a.liveAudio ? `<span class="note">תומלל בזמן השיחה ✓</span>` : PAID_ENGINE ? `<button type="button" class="btn sm" data-stt="${esc(a.path)}">תמלל מההקלטה</button>` : `<button type="button" class="btn sm" data-mac="${esc(a.path)}">תמלל במק</button>`)
   + `<audio controls preload="none" hidden></audio>`
   + (a.atr ? `<details class="trd" data-tr="${esc(a.atr)}"><summary>תומלל ✓ · תמלול מדויק מההקלטה</summary><div class="trbody">טוען…</div></details>` : "") + `</div>`;
 async function signedUrl(path, download){
