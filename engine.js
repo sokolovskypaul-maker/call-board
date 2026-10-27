@@ -98,7 +98,14 @@ const OBJ_KW = [
   ["סוכנות", ["סוכנות", "מביאים לי לידים", "קונה לידים"]],
   ["עוקץ", ["עוקץ", "מי אתה בכלל", "נשמע חשוד"]],
   ["טכנולוגי", ["לא טכנולוגי", "לא מבין במחשבים", "לא מבין בזה"]],
-  ["מאיפה", ["מאיפה יש לך", "איך השגת", "מאיפה המספר"]]];
+  ["מאיפה", ["מאיפה יש לך", "איך השגת", "מאיפה המספר"]],
+  // the six niches (Ofek, 27.10): each has one objection of its own
+  ["תלוי בביקור", ["תלוי בביקור", "לא יכולה לתת מחיר", "בלי לראות את הדירה", "צריך לראות את הדירה"]],
+  ["רוצים לדבר איתי", ["רוצים לדבר איתי", "רוצים לדבר איתו", "רוצים אותי", "לדבר איתי ישירות"]],
+  ["אפליקציה", ["אפליקציה", "זימון תורים", "מערכת תורים"]],
+  ["מערכת הזמנות", ["מערכת הזמנות", "מוקדן", "סדרן", "מוקד הזמנות"]],
+  ["המלאי", ["המלאי משתנה", "המלאי מתחלף", "הרכבים מתחלפים", "משתנה כל יום"]],
+  ["מתווך", ["לדבר עם מתווך", "רוצים מתווך", "לדבר עם בן אדם"]]];
 const GENERIC = new Set(["אחר כך", "מי זה", "מאוחר יותר", "עסוק"]);   // too common in any talk to count alone
 // Questions he asks are answered from the script too, but they are not "the main objection" in the summary.
 const QUESTION = /כמה זה עולה|וואטסאפ|מאיפה|מי זה|עוקץ/;
@@ -106,7 +113,8 @@ function mkObj(title, md, say, then){
   const t = norm(title), kws = new Set();
   for (const [frag, list] of OBJ_KW) if (t.includes(norm(frag))) list.forEach(k => kws.add(norm(k)));
   for (const p of plain(title).replace(/\(.*?\)/g, "").split(/[/?]/)){ const n = norm(p); if (n && n.split(" ").length <= 4 && !GENERIC.has(n)) kws.add(n); }
-  return {title: plain(title).replace(/\s*\(.*?\)\s*/g, " ").trim(), md, say, then, kws: [...kws], ...chunk(say)};
+  const nm = plain(title).match(/^([^:]{2,20}):\s/);   // "הובלות: ..." belongs to one niche only
+  return {title: plain(title).replace(/\s*\(.*?\)\s*/g, " ").trim(), md, say, then, kws: [...kws], niche: nm ? nm[1].trim() : "", ...chunk(say)};
 }
 // A table cell may hold both kinds: **ב׳:** "…" **א׳:** "…" **ואז:** "…"
 function tableSay(cell, kind){
@@ -118,7 +126,8 @@ function tableSay(cell, kind){
 function objFrom(sec, kind){
   const out = [];
   for (const k of sec.kids){ if (/^השיטה/.test(plain(k.title))) continue;
-    const say = sayLines(k.lines, kind); out.push(mkObj(k.title, k.lines.join("\n"), say[0] || "", "")); }
+    const say = sayLines(k.lines, kind), quoted = k.lines.find(x => /^\s*["“]/.test(x));   // a plain quoted line is the answer too
+    out.push(mkObj(k.title, k.lines.join("\n"), say[0] || (quoted ? unquote(quoted) : ""), "")); }
   for (const line of sec.lines){
     if (!line.startsWith("|") || /^\|[-\s|:]+\|?$/.test(line.trim())) continue;
     const cells = line.trim().replace(/^\||\|$/g, "").split("|").map(c => c.trim());
@@ -149,6 +158,35 @@ function parseScript(md, kind){
   return {steps, objections};
 }
 
+// ---------- the niche scripts (Ofek, 27.10) ----------
+// The sales script holds a section "תסריטים לפי תחום": a fixed opening and closing for all, and per niche "**הוק:** \"…\"",
+// "**ההצעה:** \"…\"", "**שאלת סינון:** \"…\"" (a line starting with a quote is a line to say), plus notes such as
+// "**הכאב:**" or "**לא להבטיח:**" that go with the line before them. Each niche also has an objection "### הובלות: …".
+const NICHES = [/הובל/, /מוסכ/, /מספר|ברבר/, /מוני/, /מגרש/, /תיווך/];
+const nicheRe = niche => NICHES.find(re => re.test(niche || "")) || null;
+const sameNiche = (a, b) => { const re = nicheRe(b); return !!re && re.test(a || ""); };
+function nicheScript(md, niche, kind){
+  const re = nicheRe(niche); if (!re) return null;
+  const sec = parseSections(md).find(s => /לפי תחום/.test(plain(s.title))); if (!sec) return null;
+  const part = sec.kids.find(k => re.test(plain(k.title))); if (!part) return null;
+  const group = label(part.title), steps = [];
+  const fixed = word => { const i = sec.lines.findIndex(x => new RegExp("^\\*\\*" + word).test(x.trim())); if (i < 0) return null;
+    const q = sec.lines.slice(i + 1).find(x => x.trim()); return q && q.trim().startsWith(">") ? mkStep(word, [q], splitSay(q.trim().replace(/^>\s?/, "")), group) : null; };
+  const open = fixed("פתיחה"), close = fixed("סגירה");
+  if (open) steps.push(open);
+  let last = null;
+  for (const raw of part.lines){
+    const m = raw.trim().match(/^\*\*([^*]+?):\*\*\s*(.*)$/);
+    if (m && /^["“]/.test(m[2])){ last = mkStep(m[1], [raw], splitSay(m[2]), group); steps.push(last); }
+    else if (raw.trim() && last) last.md += "\n\n" + raw;
+  }
+  if (close) steps.push(close);
+  if (!steps.length) return null;
+  const objections = parseScript(md, kind).objections.filter(o => !o.niche || re.test(o.niche));
+  steps.forEach((s, i) => { s.id = i; s.flow = "main"; }); objections.forEach((o, i) => o.id = i);
+  return {steps, objections};
+}
+
 // ---------- following the call ----------
 // How many of a line's first key words were heard. A line counts as said when about half of them were.
 function said(c, heard){
@@ -157,7 +195,7 @@ function said(c, heard){
   return hits >= (kt.length <= 2 ? kt.length : Math.max(3, Math.ceil(0.45 * kt.length)));
 }
 // A line Paul read from the script (most of a script line's key words in it). Such lines are not "the other side's words".
-const PAUL = /מדבר פול|שמי פול|אני בונה|מזכירה דיגיטלית|עוזרת דיגיטלית|קוראים לה אלה|אלה עונה|מזכירה AI/;
+const PAUL = /מדבר פול|שמי פול|פול מהמשרד|אם זה לא רלוונטי|אם זה לא בשבילך|אני בונה|מזכירה דיגיטלית|עוזרת דיגיטלית|קוראים לה אלה|אלה עונה|מזכירה AI/;
 function isPaul(text, model){
   if (PAUL.test(norm(text))) return true;
   const kt = new Set(keyToks(text)); if (kt.size < 3) return false;
@@ -445,7 +483,7 @@ function extract({lines = [], model = null, kind = "B", objections = [], dur = 0
   return {summary: sm, calc, status, callback: ["demo", "callback"].includes(status) ? when : "", log, why, facts: f, words};
 }
 
-const Engine = {norm, keyToks, has, parseScript, said, isPaul, findObjection, isBye, facts, whenIn, resolveWhen, agreedWhen, extract, localISO, numbersIn, ntoks};
+const Engine = {norm, keyToks, has, parseScript, nicheScript, nicheRe, sameNiche, said, isPaul, findObjection, isBye, facts, whenIn, resolveWhen, agreedWhen, extract, localISO, numbersIn, ntoks};
 root.Engine = Engine;
 if (typeof module !== "undefined" && module.exports) module.exports = Engine;
 })(typeof window !== "undefined" ? window : globalThis);

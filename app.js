@@ -58,18 +58,25 @@ const models = new Map();     // "script:kind" -> the parsed script (Engine.pars
 const blank = () => ({status: "new", attempts: 0, notes: "", callback: "", summary: {}, history: []});
 const rec = id => byId[id] || blank();
 const trackKind = l => l.track === "ראשית" ? "discovery" : "sales";
-const scriptKeys = l => [l.track === "ראשית" ? "discovery" : "sales", ...(SCRIPTS.short ? ["short"] : [])];
+// A lead tagged "תחומים-27.10" in one of Ofek's six niches follows its niche script (inside the sales script) first.
+const nicheLead = l => (l.tags || []).some(t => /תחומים/.test(t)) && !!Engine.nicheRe(l.niche) && /לפי תחום/.test(SCRIPTS.sales || "");
+const scriptKeys = l => [...(nicheLead(l) ? ["niche"] : []), l.track === "ראשית" ? "discovery" : "sales", ...(SCRIPTS.short ? ["short"] : [])];
+const scriptName = (k, l) => k === "niche" ? `התסריט של ${l.niche}` : SCRIPT_NAMES[k];
+const pickKey = l => "script:" + trackKind(l) + (nicheLead(l) ? ":niche" : "");
 function scriptPick(l){
-  const keys = scriptKeys(l); let p = ""; try { p = localStorage.getItem("script:" + trackKind(l)) || ""; } catch {}
-  return keys.includes(p) ? p : (l.track !== "ראשית" && SCRIPTS.short ? "short" : keys[0]);
+  const keys = scriptKeys(l); let p = ""; try { p = localStorage.getItem(pickKey(l)) || ""; } catch {}
+  return keys.includes(p) ? p : nicheLead(l) ? "niche" : (l.track !== "ראשית" && SCRIPTS.short ? "short" : keys[0]);
 }
 // The chosen script, plus the objection answers it lacks from the other scripts (the short script has no "יקר", for one).
+// An objection of one niche ("הובלות: …") is kept only for leads of that niche.
 function modelFor(l){
-  const pick = scriptPick(l), k = pick + ":" + kindOf(l); if (models.has(k)) return models.get(k);
-  const m = Engine.parseScript(SCRIPTS[pick] || "", kindOf(l)), have = new Set(m.objections.flatMap(o => o.kws));
+  const pick = scriptPick(l), k = pick + ":" + kindOf(l) + ":" + (l.niche || ""); if (models.has(k)) return models.get(k);
+  const fits = o => !o.niche || Engine.sameNiche(o.niche, l.niche);
+  const base = (pick === "niche" && Engine.nicheScript(SCRIPTS.sales, l.niche, kindOf(l))) || Engine.parseScript(SCRIPTS[pick] || SCRIPTS.sales || "", kindOf(l));
+  const m = {steps: base.steps, objections: base.objections.filter(fits).map((o, i) => ({...o, id: i}))}, have = new Set(m.objections.flatMap(o => o.kws));
   for (const other of ["short", "sales", "discovery"].filter(x => x !== pick && SCRIPTS[x]))
     for (const o of Engine.parseScript(SCRIPTS[other], kindOf(l)).objections)
-      if (!o.kws.some(w => have.has(w))){ m.objections.push({...o, id: m.objections.length}); o.kws.forEach(w => have.add(w)); }
+      if (fits(o) && !o.kws.some(w => have.has(w))){ m.objections.push({...o, id: m.objections.length}); o.kws.forEach(w => have.add(w)); }
   models.set(k, m); return m;
 }
 const fmt =ms => { const s = Math.max(0, Math.floor(ms / 1000)); return String(Math.floor(s / 60)).padStart(2, "0") + ":" + String(s % 60).padStart(2, "0"); };
@@ -315,7 +322,7 @@ function liveHtml(l){
       <span class="mic ${listening ? "on" : ""}" id="mic"><span class="dot"></span>${listening ? "מקשיב" : "לא מקשיב"}</span>
       <span class="recbadge ${call.recording ? "on" : ""}" id="recBadge">${recBadgeText()}</span>
       <button type="button" class="linkbtn" id="listenToggle">${listening ? "השהה הקשבה" : "🎙 הקשב"}</button>
-      ${keys.length > 1 ? `<select id="scriptPick" aria-label="התסריט שהשיחה עוקבת אחריו">${keys.map(k => `<option value="${k}" ${k === scriptPick(l) ? "selected" : ""}>${SCRIPT_NAMES[k]}</option>`).join("")}</select>` : ""}</div>
+      ${keys.length > 1 ? `<select id="scriptPick" aria-label="התסריט שהשיחה עוקבת אחריו">${keys.map(k => `<option value="${k}" ${k === scriptPick(l) ? "selected" : ""}>${esc(scriptName(k, l))}</option>`).join("")}</select>` : ""}</div>
     <div class="endbanner" id="endBanner" role="status" hidden></div>
     <div class="say" id="sayBox" aria-live="polite"></div>
     <div class="heardfacts" id="heardFacts" hidden></div>
@@ -549,7 +556,7 @@ $("#detail").addEventListener("input", e => {
   const t = e.target; if (!selId) return;
   if (t.id === "suggestToggle") setSuggest(t.checked);
   else if (t.id === "f-status") setStatus(selId, t.value);
-  else if (t.id === "scriptPick"){ try { localStorage.setItem("script:" + trackKind(DATA.find(x => x.id === selId)), t.value); } catch {} if (call) useScript(call); }
+  else if (t.id === "scriptPick"){ try { localStorage.setItem(pickKey(DATA.find(x => x.id === selId)), t.value); } catch {} if (call) useScript(call); }
   else if (t.id === "logPick"){ editLog[selId] = t.value; renderDetail(); }
   else if (t.id === "f-transcript") edit(selId, r => { r.callText = t.value; }, 600, "callText");
   else if (t.id === "f-notes") edit(selId, r => { r.notes = t.value; }, 600, "notes");
