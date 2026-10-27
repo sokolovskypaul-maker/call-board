@@ -289,7 +289,7 @@ function liveHtml(l){
       : `<button type="button" class="btn primary" id="callStart">🎙 התחל שיחה והקשב</button><button type="button" class="btn sm" id="callManual">▶ מצב שיחה בלי הקשבה</button>
         <span class="note">האייפון על רמקול ליד המחשב, בחדר שקט. השיחה מוקלטת, וההקלטה והתמלול נשמרים בכרטיס. <b>לומר לצד השני שהשיחה מוקלטת.</b></span>`}
     </div>
-    <label class="sugsw" for="suggestToggle"><input type="checkbox" id="suggestToggle" ${suggestOn ? "checked" : ""}> 💡 הצעות חיות: "מה להגיד עכשיו"<span class="note">כל רבע דקה, הדקה האחרונה נשלחת ל-OpenAI (תמלול) ול-Claude (הצעה). בלי מספרי טלפון.</span></label>
+    ${PAID_ENGINE ? `<label class="sugsw" for="suggestToggle"><input type="checkbox" id="suggestToggle" ${suggestOn ? "checked" : ""}> 💡 הצעות חיות: "מה להגיד עכשיו"<span class="note">כל רבע דקה, הדקה האחרונה נשלחת ל-OpenAI (תמלול) ול-Claude (הצעה). בלי מספרי טלפון.</span></label>` : ""}
     ${call && !on ? `<div class="inline"><span class="note">יש שיחה פתוחה עם ${esc(DATA.find(x => x.id === call.id)?.name || "")}. שיחה חדשה כאן תסגור ותשמור אותה.</span><button type="button" class="btn sm" id="callGoto">חזור אליה</button></div>` : ""}
     ${on ? `<div class="suggest" id="suggestBox" aria-live="polite" hidden></div>` : ""}
     ${chips}
@@ -604,7 +604,7 @@ async function uploadRecording(c, blob){
 // (the suggestions switch was on) already has one, so its row offers no button.
 const audioMeta = (r, path) => { const x = (r.calls || []).find(x => x.audio && x.audio.path === path); return x ? {...x.audio, liveAudio: !!x.liveAudio} : {path}; };
 const recRow = a => `<div class="recrow"><span>${a.at ? fmtDT(a.at) : "הקלטה"}${a.dur ? " · " + fmt(a.dur * 1000) : ""}</span><button type="button" class="btn sm" data-play="${esc(a.path)}">▶ נגן</button><button type="button" class="btn sm" data-dl="${esc(a.path)}">הורד</button>`
-  + (a.atr ? "" : a.liveAudio ? `<span class="note">תומלל בזמן השיחה ✓</span>` : `<button type="button" class="btn sm" data-stt="${esc(a.path)}">תמלל מההקלטה</button>`)
+  + (a.atr ? "" : a.liveAudio ? `<span class="note">תומלל בזמן השיחה ✓</span>` : PAID_ENGINE ? `<button type="button" class="btn sm" data-stt="${esc(a.path)}">תמלל מההקלטה</button>` : "")
   + `<audio controls preload="none" hidden></audio>`
   + (a.atr ? `<details class="trd" data-tr="${esc(a.atr)}"><summary>תומלל ✓ · תמלול מדויק מההקלטה</summary><div class="trbody">טוען…</div></details>` : "") + `</div>`;
 async function signedUrl(path, download){
@@ -702,8 +702,12 @@ function renderTranscript(){ const box = $("#liveTranscript"); if (!box || !live
 // (OpenAI) and sends the last minute to Claude for one line to say now. A silent stretch is not sent, a suggestion is asked
 // only when the previous answer is back, and one that arrives more than 10 seconds late is dropped. The pieces together are
 // the call's accurate transcript. The switch is off by default and remembered on this computer. The keys live only on the server.
+// Off since 27.10: Paul decided everything must be free, and these two functions run on paid engines (OpenAI, Claude).
+// While off, the switch and the "transcribe the recording" button are not shown and nothing is sent. The code stays for
+// a free engine (Whisper on the Mac, see transcription-plan.md).
+const PAID_ENGINE = false;
 const CHUNK_MS = 15000, LATE_MS = 10000, QUIET_RMS = 0.004;
-let suggestOn = (() => { try { return localStorage.getItem("liveSuggest") === "1"; } catch { return false; } })();
+let suggestOn = PAID_ENGINE && (() => { try { return localStorage.getItem("liveSuggest") === "1"; } catch { return false; } })();
 const KEY_TEXT = {OPENAI_API_KEY: "המפתח של OpenAI עוד לא הודבק בשרת, ולכן אין תמלול מדויק", ANTHROPIC_API_KEY: "המפתח של Anthropic עוד לא הודבק בשרת, ולכן אין הצעות"};
 // The functions check that the login is still alive on the server (the database only checks the token), so a login
 // ended elsewhere, for example by a password change, shows up here first.
@@ -726,7 +730,7 @@ function setSuggest(on){
   renderSuggest();
 }
 function startChunks(c){
-  if (!suggestOn || !c || !c.recording || readOnly || call !== c) return;
+  if (!PAID_ENGINE || !suggestOn || !c || !c.recording || readOnly || call !== c) return;
   let ch = c.chunks; if (ch && !ch.stopped) return;
   if (!ch) ch = c.chunks = {texts: [], items: [], pending: new Set(), busy: false, mode: "audio", msg: ""};
   const r = c.recording; ch.stopped = false; ch.peak = 1;
