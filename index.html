@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Hebrew:wght@400;500;600;700&family=Suez+One&family=IBM+Plex+Mono:wght@500;600&display=swap">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/dist/umd/supabase.js" integrity="sha384-BWcjm9OdFth9TbhCxZPdm+gAOUMAzQy9nmTs12ioXdCcbVnJaPMn+fMUoQCLt60R" crossorigin="anonymous"></script>
-<script src="config.js?v=2026-10-27j"></script>
+<script src="config.js?v=2026-10-27k"></script>
 <style>
 /* Layout: a two-pane call sheet. The call queue sits on the start side, the open lead's call card beside it; the live call panel sits at the top of the card. One column on phones. */
 :root{
@@ -143,6 +143,13 @@ header.top{padding-block:12px 10px;display:grid;gap:10px;border-bottom:1px solid
 .recbadge{font-size:13px;font-weight:600;color:var(--muted)} .recbadge.on{color:var(--rec)}
 .recrow{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:13.5px}
 .recrow audio{width:100%;max-width:420px}
+.recrow .trd{flex-basis:100%}
+.sugsw{display:flex;flex-wrap:wrap;gap:4px 8px;align-items:center;font-size:14px;cursor:pointer}
+.suggest{border:2px solid var(--call);border-radius:12px;padding:10px 12px;display:grid;gap:6px}
+.suggest .sg-h{font-size:12.5px;font-weight:600;color:var(--muted)}
+.suggest .sg{font:400 19px/1.35 var(--f-display)}
+.suggest .sg.old{font:14px/1.45 var(--f-body);color:var(--muted)}
+.sgtag{display:inline-block;font:600 11.5px/1.6 var(--f-body);background:var(--ok-bg);color:var(--ok-ink);border-radius:999px;padding:0 8px;margin-inline-end:8px;vertical-align:middle}
 .trbody .k{color:var(--muted);font-size:12.5px}
 .calcgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}
 .calcgrid .f{display:flex;flex-direction:column;gap:4px;font-size:12.5px;color:var(--muted)}
@@ -264,6 +271,6 @@ details.script summary{cursor:pointer;font-weight:600}
   </section>
 </div>
 
-<script src="app.js?v=2026-10-27j"></script>
+<script src="app.js?v=2026-10-27k"></script>
 </body>
 </html>

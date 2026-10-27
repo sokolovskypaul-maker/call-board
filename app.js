@@ -289,7 +289,9 @@ function liveHtml(l){
       : `<button type="button" class="btn primary" id="callStart">🎙 התחל שיחה והקשב</button><button type="button" class="btn sm" id="callManual">▶ מצב שיחה בלי הקשבה</button>
         <span class="note">האייפון על רמקול ליד המחשב, בחדר שקט. השיחה מוקלטת, וההקלטה והתמלול נשמרים בכרטיס. <b>לומר לצד השני שהשיחה מוקלטת.</b></span>`}
     </div>
+    <label class="sugsw" for="suggestToggle"><input type="checkbox" id="suggestToggle" ${suggestOn ? "checked" : ""}> 💡 הצעות חיות: "מה להגיד עכשיו"<span class="note">כל רבע דקה, הדקה האחרונה נשלחת ל-OpenAI (תמלול) ול-Claude (הצעה). בלי מספרי טלפון.</span></label>
     ${call && !on ? `<div class="inline"><span class="note">יש שיחה פתוחה עם ${esc(DATA.find(x => x.id === call.id)?.name || "")}. שיחה חדשה כאן תסגור ותשמור אותה.</span><button type="button" class="btn sm" id="callGoto">חזור אליה</button></div>` : ""}
+    ${on ? `<div class="suggest" id="suggestBox" aria-live="polite" hidden></div>` : ""}
     ${chips}
     <div id="liveObj"></div>
     ${on && live ? `<div class="transcript" id="liveTranscript" aria-live="polite"></div>` : ""}
@@ -349,7 +351,7 @@ function renderDetail(){
     <section class="box" id="fillBox"><h3>מה היה בשיחה, וסיכום עם Claude</h3>
       <div class="note">כאן כותבים מה היה בשיחה, ונשמר אוטומטית. אחרי שיחה במצב הקשבה, התמלול נכנס לכאן לבד, ונשמר גם ב"תמלולי שיחות". לסיכום: "העתק ל-Claude", מדביקים בצ'אט של Claude, ומעתיקים לכאן את התשובה. שום דבר לא נכנס לטופס לפני שאתה מאשר.</div>
       ${recWarn[l.id] ? `<div class="msg">${esc(recWarn[l.id])}</div>` : ""}
-      ${recs.length ? `<div class="trlog"><div class="note">הקלטות שיחה</div>${recs.map(x => recRow(x.audio)).join("")}</div>` : ""}
+      ${recs.length ? `<div class="trlog"><div class="note">הקלטות שיחה</div>${recs.map(x => recRow(audioMeta(r, x.audio.path))).join("")}</div>` : ""}
       ${trs.length ? `<div class="trlog"><div class="note">תמלולי שיחות</div>${trs.map(x => `<details class="trd" data-tr="${esc(x.tr)}"><summary>${fmtDT(x.at)} · ${call && call.trId === x.tr ? "בשיחה עכשיו" : x.dur ? fmt(x.dur * 1000) + " דקות" : "השיחה נקטעה"}</summary><div class="trbody">טוען…</div></details>`).join("")}</div>` : ""}
       <label for="f-transcript" class="note">מה היה בשיחה / תמלול ${sv(l, "callText")}</label>
       <textarea id="f-transcript" placeholder="מה היה בשיחה, במילים שלך, או התמלול">${esc(r.callText || "")}</textarea>
@@ -365,7 +367,7 @@ function renderDetail(){
       <div class="form">${form}</div>
     </section>
     ${scriptBoxes}`;
-  renderTranscript(); renderLiveObj();
+  renderTranscript(); renderLiveObj(); renderSuggest();
 }
 // ---------- post-call log: Ofek's six-line template (round 7) ----------
 // Each call is its own dated entry in rec.logs, so a new one never overwrites an earlier one.
@@ -475,6 +477,8 @@ $("#detail").addEventListener("click", async e => {
   if (pl){ const au = pl.parentElement.querySelector("audio"), url = await signedUrl(pl.dataset.play); if (!url){ pl.textContent = "לא נמצא"; return; } au.hidden = false; au.src = url; au.play().catch(() => {}); return; }
   const dl = t.closest("[data-dl]");
   if (dl){ const url = await signedUrl(dl.dataset.dl, true); if (!url){ dl.textContent = "לא נמצא"; return; } const a = document.createElement("a"); a.href = url; a.rel = "noopener"; document.body.appendChild(a); a.click(); a.remove(); return; }
+  const stt = t.closest("[data-stt]");
+  if (stt && selId && !stt.disabled){ transcribeRecording(selId, stt); return; }
   if (t.closest("#logSave")){ saveLog(); return; }
   if (t.closest("#summaryClose")){ summaryOpen = false; if (selId) renderDetail(); else $("#detail").innerHTML = EMPTY_DETAIL; app.classList.toggle("showdetail", !!selId); return; }
   if (t.closest("#callGoto") && call){ selId = call.id; renderList(); renderDetail(); return; }
@@ -497,7 +501,8 @@ $("#detail").addEventListener("click", async e => {
 });
 $("#detail").addEventListener("input", e => {
   const t = e.target; if (!selId) return;
-  if (t.id === "f-transcript") edit(selId, r => { r.callText = t.value; }, 600, "callText");
+  if (t.id === "suggestToggle") setSuggest(t.checked);
+  else if (t.id === "f-transcript") edit(selId, r => { r.callText = t.value; }, 600, "callText");
   else if (t.id === "f-answer") edit(selId, r => { r.claudeAnswer = t.value; }, 600, "claudeAnswer");
   else if (t.id === "f-notes") edit(selId, r => { r.notes = t.value; }, 600, "notes");
   else if (t.id === "f-callback"){ edit(selId, r => { r.callback = t.value; }, 0, "callback"); renderList(); }
@@ -524,18 +529,20 @@ function startCall(listen){
   renderDetail(); if (listen){ startListening(); startRecording(call); }
 }
 function endCall(){
-  const c = call; if (!c) return; stopListening(); const recP = stopRecording(c);
+  const c = call; if (!c) return; stopListening(); const chP = stopChunks(c), recP = stopRecording(c);
   if (live && live.interim){ live.lines.push({t: Date.now(), text: live.interim}); live.interim = ""; }
   const lines = live ? live.lines : [];
   c.end = Date.now(); clearInterval(c.timer); clearTimeout(c.trTimer); call = null; live = null;
-  const keep = lines.length > 0 && !readOnly;
+  const keep = (lines.length > 0 || !!c.chunks) && !readOnly;
   const entry = {at: new Date(c.end).toISOString(), dur: Math.round((c.end - c.start) / 1000), stages: [...c.stages], objections: [...c.objections], ...(keep ? {tr: c.trId} : {})};
   const d = keep ? trDoc(c, lines, "final") : null; if (d) trCache[c.trId] = d;
+  c.chromeText = d && lines.length ? trText(d) : "";
   edit(c.id, r => { const i = (r.calls || []).findIndex(x => x.tr && x.tr === c.trId);
     r.calls = i >= 0 ? r.calls.map((x, j) => j === i ? entry : x) : [...(r.calls || []), entry].slice(-20);
-    if (d) r.callText = trText(d); }, 0, d ? "callText" : "");
+    if (c.chromeText) r.callText = c.chromeText; }, 0, c.chromeText ? "callText" : "");
   c.entryAt = entry.at; recP.then(blob => { if (blob) uploadRecording(c, blob); });
-  if (keep) saveTr(c, lines, "final").then(ok => { if (!ok) setSync("err", "התמלול לא נשמר בטבלת התמלולים. הוא שמור בכרטיס, בתיבה \"מה היה בשיחה\""); });
+  chP.then(ch => { if (ch) finishChunks(c, ch); });
+  if (keep && lines.length) saveTr(c, lines, "final").then(ok => { if (!ok) setSync("err", "התמלול לא נשמר בטבלת התמלולים. הוא שמור בכרטיס, בתיבה \"מה היה בשיחה\""); });
   if (c.id !== selId) return;
   renderDetail(); document.getElementById("fillBox")?.scrollIntoView({behavior: "smooth", block: "start"});
 }
@@ -562,6 +569,7 @@ async function startRecording(c){
   const chunks = []; mr.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
   mr.start(1000);
   c.recording = {mr, stream, chunks, mime: mr.mimeType || mime || "audio/webm"}; c.recState = "on"; renderRecBadge();
+  startChunks(c);
 }
 function stopRecording(c){
   const r = c && c.recording; if (!r) return Promise.resolve(null);
@@ -592,8 +600,13 @@ async function uploadRecording(c, blob){
   edit(c.id, r => { r.calls = (r.calls || []).map(x => x.at === c.entryAt ? {...x, audio} : x); r.logDraft = {...(r.logDraft || {}), audio: path}; }, 0, "audio");
   if (c.id === selId && !summaryOpen) renderDetail();
 }
-const audioMeta = (r, path) => (r.calls || []).map(x => x.audio).find(a => a && a.path === path) || {path};
-const recRow = a => `<div class="recrow"><span>${a.at ? fmtDT(a.at) : "הקלטה"}${a.dur ? " · " + fmt(a.dur * 1000) : ""}</span><button type="button" class="btn sm" data-play="${esc(a.path)}">▶ נגן</button><button type="button" class="btn sm" data-dl="${esc(a.path)}">הורד</button><audio controls preload="none" hidden></audio></div>`;
+// A recording's accurate transcript: "atr" points to its row in "transcripts". A call whose transcript was made live
+// (the suggestions switch was on) already has one, so its row offers no button.
+const audioMeta = (r, path) => { const x = (r.calls || []).find(x => x.audio && x.audio.path === path); return x ? {...x.audio, liveAudio: !!x.liveAudio} : {path}; };
+const recRow = a => `<div class="recrow"><span>${a.at ? fmtDT(a.at) : "הקלטה"}${a.dur ? " · " + fmt(a.dur * 1000) : ""}</span><button type="button" class="btn sm" data-play="${esc(a.path)}">▶ נגן</button><button type="button" class="btn sm" data-dl="${esc(a.path)}">הורד</button>`
+  + (a.atr ? "" : a.liveAudio ? `<span class="note">תומלל בזמן השיחה ✓</span>` : `<button type="button" class="btn sm" data-stt="${esc(a.path)}">תמלל מההקלטה</button>`)
+  + `<audio controls preload="none" hidden></audio>`
+  + (a.atr ? `<details class="trd" data-tr="${esc(a.atr)}"><summary>תומלל ✓ · תמלול מדויק מההקלטה</summary><div class="trbody">טוען…</div></details>` : "") + `</div>`;
 async function signedUrl(path, download){
   try { const {data, error} = await sb.storage.from("recordings").createSignedUrl(path, 3600, download ? {download: path.split("/").pop()} : undefined); return error ? null : data.signedUrl; } catch { return null; }
 }
@@ -605,17 +618,20 @@ function trDoc(c, lines, status){
   const l = DATA.find(x => x.id === c.id) || {};
   const d = {lead: c.id, name: l.name || "", niche: l.niche || "", at: new Date(c.start).toISOString(), dur: Math.round(((c.end || Date.now()) - c.start) / 1000), status,
     stages: STAGES[trackKind(l)].map(([n]) => n).filter(n => c.stages.has(n)), objections: [...c.objections],
-    lines: lines.map(x => ({s: Math.round((x.t - c.start) / 1000), x: x.text}))};
+    lines: lines.map(x => ({s: Math.round((x.t - c.start) / 1000), x: x.text})), ...chunkDoc(c)};
   while (d.lines.length > 1 && JSON.stringify(d).length > 400000){ d.lines.shift(); d.trimmed = true; }
   return d;
 }
+// The accurate transcript from the recording (OpenAI) wins over Chrome's live text when the call has one.
+const trLine = x => x.s == null ? x.x : `[${fmt(x.s * 1000)}] ${x.x}`;
 function trText(d){
+  const accurate = (d.audio || []).length ? d.audio : d.source === "audio" ? d.lines : null;
   return [`שיחה עם: ${d.name}${d.niche ? " (" + d.niche + ")" : ""}`,
-    `תאריך: ${new Date(d.at).toLocaleString("he-IL")} · משך: ${fmt(d.dur * 1000)}`,
+    `תאריך: ${d.at ? new Date(d.at).toLocaleString("he-IL") : "לא ידוע"} · משך: ${fmt((d.dur || 0) * 1000)}`,
     `שלבים שזוהו: ${(d.stages || []).join(", ") || "אין"}`,
     `התנגדויות שעלו: ${(d.objections || []).join(", ") || "אין"}`,
-    "", "תמלול (ערוץ אחד, בלי הפרדה בין הדוברים):",
-    ...(d.lines || []).map(x => `[${fmt(x.s * 1000)}] ${x.x}`)].join("\n");
+    "", accurate ? "תמלול מדויק מההקלטה (ערוץ אחד, בלי הפרדה בין הדוברים):" : "תמלול (ערוץ אחד, בלי הפרדה בין הדוברים):",
+    ...(accurate || d.lines || []).map(trLine)].join("\n");
 }
 function queueTrSave(){
   const c = call; if (!c || readOnly || c.trTimer) return;
@@ -634,9 +650,12 @@ function saveTr(c, lines, status){
   return c.trChain;
 }
 $("#detail").addEventListener("toggle", async e => {
-  const d = e.target; if (!d.matches?.(".trd") || !d.open) return;
+  const d = e.target; if (!d.matches?.(".trd[data-tr]") || !d.open) return;   // the post-call log's entries are .trd too, with nothing to load
   const id = d.dataset.tr, body = d.querySelector(".trbody");
-  const showTr = t => { body.innerHTML = (t.lines || []).map(x => `<div class="trline"><span class="ts">${fmt(x.s * 1000)}</span>${esc(x.x)}</div>`).join("")
+  const row = x => `<div class="trline">${x.s == null ? "" : `<span class="ts">${fmt(x.s * 1000)}</span>`}${esc(x.x)}</div>`;
+  const showTr = t => { const accurate = (t.audio || []).length;
+    body.innerHTML = (accurate ? `<div class="note">תמלול מדויק מההקלטה</div>` + t.audio.map(row).join("") : (t.lines || []).map(row).join(""))
+    + ((t.sugg || []).length ? `<div class="note">הצעות "מה להגיד עכשיו" שהופיעו בשיחה</div>` + t.sugg.map(x => `<div class="trline"><span class="ts">${fmt(x.s * 1000)}</span>${x.tag ? `<span class="sgtag">${esc(x.tag)}</span>` : ""}${esc(x.say)}</div>`).join("") : "")
     + `<div class="inline"><button type="button" class="btn sm" data-trfill="${esc(id)}">העבר ל"סיכום עם Claude"</button></div>`; };
   if (trCache[id] && !(call && call.trId === id)){ showTr(trCache[id]); return; }
   const {data, error} = await sb.from("transcripts").select("data").eq("id", id).maybeSingle();
@@ -677,6 +696,124 @@ function refreshChips(){ const l = DATA.find(x => x.id === selId); const box = $
 function renderTranscript(){ const box = $("#liveTranscript"); if (!box || !live) return;
   box.innerHTML = live.lines.slice(-40).map(x => `<div><span class="ts">${fmt(x.t - (call ? call.start : x.t))}</span>${esc(x.text)}</div>`).join("") + (live.interim ? `<div class="interim">${esc(live.interim)}</div>` : "");
   box.scrollTop = box.scrollHeight; }
+
+// ---------- "what to say now" and accurate transcripts (server functions "live" and "transcribe") ----------
+// With the switch on, a recorded call is also cut into separate 15-second files. Each goes to "live", which transcribes it
+// (OpenAI) and sends the last minute to Claude for one line to say now. A silent stretch is not sent, a suggestion is asked
+// only when the previous answer is back, and one that arrives more than 10 seconds late is dropped. The pieces together are
+// the call's accurate transcript. The switch is off by default and remembered on this computer. The keys live only on the server.
+const CHUNK_MS = 15000, LATE_MS = 10000, QUIET_RMS = 0.004;
+let suggestOn = (() => { try { return localStorage.getItem("liveSuggest") === "1"; } catch { return false; } })();
+const KEY_TEXT = {OPENAI_API_KEY: "המפתח של OpenAI עוד לא הודבק בשרת, ולכן אין תמלול מדויק", ANTHROPIC_API_KEY: "המפתח של Anthropic עוד לא הודבק בשרת, ולכן אין הצעות"};
+async function callFn(name, body, ms){
+  const {data} = await sb.auth.getSession(), token = data.session && data.session.access_token;
+  if (!token) return {error: "auth"};
+  const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), ms), form = body instanceof FormData;
+  try {
+    const res = await fetch(`${CFG.url}/functions/v1/${name}`, {method: "POST", signal: ctl.signal, body: form ? body : JSON.stringify(body),
+      headers: {Authorization: "Bearer " + token, apikey: CFG.key, ...(form ? {} : {"Content-Type": "application/json"})}});
+    const out = await res.json().catch(() => ({}));
+    return res.ok ? out : {...out, error: out.error || "http_" + res.status};
+  } catch (e){ return {error: e && e.name === "AbortError" ? "timeout" : "network"}; }
+  finally { clearTimeout(timer); }
+}
+function setSuggest(on){
+  suggestOn = on; try { localStorage.setItem("liveSuggest", on ? "1" : "0"); } catch {}
+  if (call){ if (on) startChunks(call); else stopChunks(call); }
+  renderSuggest();
+}
+function startChunks(c){
+  if (!suggestOn || !c || !c.recording || readOnly || call !== c) return;
+  let ch = c.chunks; if (ch && !ch.stopped) return;
+  if (!ch) ch = c.chunks = {texts: [], items: [], pending: new Set(), busy: false, mode: "audio", msg: ""};
+  const r = c.recording; ch.stopped = false; ch.peak = 1;
+  try {   // a level meter, so a silent stretch is not sent (and not billed)
+    const ac = new AudioContext(), an = ac.createAnalyser(), buf = new Float32Array(1024); an.fftSize = 1024;
+    ac.createMediaStreamSource(r.stream).connect(an); ch.ac = ac; ch.peak = 0;
+    ac.resume().catch(() => {});
+    ch.meter = setInterval(() => { if (ac.state !== "running"){ ch.peak = 1; return; }   // a meter Chrome would not start must not silence the call
+      an.getFloatTimeDomainData(buf); let s = 0; for (const v of buf) s += v * v; ch.peak = Math.max(ch.peak, Math.sqrt(s / buf.length)); }, 250);
+  } catch {}
+  const next = () => {
+    if (call !== c || c.chunks !== ch || ch.stopped || !c.recording) return;
+    const parts = [], t0 = Date.now(), mr = new MediaRecorder(r.stream, {mimeType: r.mime, audioBitsPerSecond: 32000});
+    mr.ondataavailable = e => { if (e.data && e.data.size) parts.push(e.data); };
+    mr.onstop = () => { const loud = ch.peak, last = ch.stopped; ch.peak = ch.ac ? 0 : 1; if (!last) next();
+      if (parts.length && loud >= QUIET_RMS) sendChunk(c, ch, new Blob(parts, {type: r.mime}), t0, last); };
+    ch.mr = mr; mr.start(); ch.timer = setTimeout(() => { try { mr.stop(); } catch {} }, CHUNK_MS);
+  };
+  next(); renderSuggest();
+}
+// Stops cutting pieces; the last few seconds still go out (transcribed, no suggestion). Resolves once every answer is back.
+function stopChunks(c){
+  const ch = c && c.chunks; if (!ch || ch.stopped) return Promise.resolve(ch || null);
+  ch.stopped = true; clearTimeout(ch.timer); clearInterval(ch.meter);
+  const stopped = new Promise(res => { const mr = ch.mr; if (!mr || mr.state === "inactive") return res();
+    const done = mr.onstop; mr.onstop = () => { done && done(); res(); }; try { mr.stop(); } catch { res(); } });
+  return stopped.then(() => { try { ch.ac && ch.ac.close(); } catch {} ch.ac = null; return Promise.allSettled([...ch.pending]); }).then(() => ch);
+}
+async function sendChunk(c, ch, blob, t0, final){
+  const l = DATA.find(x => x.id === c.id) || {}, mode = ch.mode, sent = Date.now();
+  const prev = ch.texts.filter(x => x.t < t0 && x.t >= t0 - 46000).sort((a, b) => a.t - b.t).map(x => x.text).join(" ");
+  const fd = new FormData(); fd.append("lead", c.id); fd.append("kind", kindOf(l)); fd.append("prev", prev);
+  const asking = !final && !ch.busy;
+  if (!asking) fd.append(final ? "final" : "nosuggest", "1");
+  if (mode === "text"){   // no OpenAI key: Claude gets Chrome's live text of the last minute instead
+    const lines = (live && live.lines || []).filter(x => x.t >= sent - 60000), last = lines.length ? lines[lines.length - 1].t : 0;
+    if (!asking || last <= (ch.lastText || 0)) return;
+    ch.lastText = last; fd.append("text", lines.map(x => x.text).join(" "));
+  } else fd.append("audio", blob, "chunk." + (blob.type.includes("mp4") ? "m4a" : blob.type.includes("ogg") ? "ogg" : "webm"));
+  if (asking) ch.busy = true;
+  const p = callFn("live", fd, 25000); ch.pending.add(p);
+  const res = await p; ch.pending.delete(p); if (asking) ch.busy = false;
+  if (mode === "audio" && res.text) ch.texts.push({t: t0, text: res.text});
+  if (res.error === "missing_key"){ if (res.key === "OPENAI_API_KEY") ch.mode = "text"; ch.msg = KEY_TEXT[res.key] + (res.key === "OPENAI_API_KEY" ? ". ההצעות יעבדו מהתמלול של Chrome." : "."); }
+  else if (res.error === "auth" || res.error === "not_member") ch.msg = "השרת לא זיהה את המשתמש. רענן את הדף.";
+  else if (res.error && !final) ch.msg = "השרת לא ענה הפעם. ממשיך לנסות כל רבע דקה.";
+  else if (!res.error) ch.msg = "";
+  if (res.say && !final && Date.now() - sent <= LATE_MS) ch.items.push({t: sent, s: Math.round((sent - c.start) / 1000), say: res.say, tag: res.tag || ""});
+  if (call === c) renderSuggest();
+}
+const chunkDoc = c => c.chunks ? {audio: c.chunks.texts.slice().sort((a, b) => a.t - b.t).map(x => ({s: Math.round((x.t - c.start) / 1000), x: x.text})),
+  sugg: c.chunks.items.map(({s, say, tag}) => ({s, say, tag}))} : {};
+// After the call: the pieces become the accurate transcript, kept with the call's transcript row. The text in the card
+// is replaced only if nobody changed it since the call ended.
+function finishChunks(c, ch){
+  const extra = chunkDoc(c); if (!extra.audio.length && !extra.sugg.length) return;
+  const d = {...(trCache[c.trId] || trDoc(c, [], "final")), ...extra, status: "final"}; trCache[c.trId] = d;
+  c.trChain = (c.trChain || Promise.resolve(true)).then(async () => {
+    let error = null;
+    try { ({error} = await sb.from("transcripts").upsert({id: c.trId, lead_id: c.id, data: d, updated_at: new Date().toISOString(), updated_by: user.id})); } catch (e){ error = e; }
+    const text = extra.audio.length ? trText(d) : "";
+    if (error) setSync("err", text ? "התמלול המדויק לא נשמר בטבלת התמלולים. הוא נשמר בכרטיס, בתיבה \"מה היה בשיחה\"" : "ההצעות מהשיחה לא נשמרו בשרת");
+    edit(c.id, r => { r.calls = (r.calls || []).map(x => x.tr === c.trId ? {...x, liveAudio: extra.audio.length > 0} : x);
+      if (!text) return;
+      if (!r.callText || r.callText === c.chromeText) r.callText = text;          // untouched since the call: the accurate text replaces it
+      else if (error) r.callText += "\n\n" + text; }, 0, text ? "callText" : "");  // edited, and the row did not save: kept below the edits
+    if (c.id === selId && !summaryOpen && !call){ const ta = $("#f-transcript"); if (ta && ta !== document.activeElement) ta.value = rec(c.id).callText || ""; }
+    return !error;
+  });
+}
+function renderSuggest(){
+  const box = $("#suggestBox"); if (!box) return;
+  if (!suggestOn || !call){ box.hidden = true; box.innerHTML = ""; return; }
+  const ch = call.chunks, items = ch ? ch.items.slice(-3).reverse() : [];
+  box.hidden = false;
+  box.innerHTML = `<div class="sg-h">מה להגיד עכשיו</div>`
+    + (items.length ? items.map((x, i) => `<div class="sg ${i ? "old" : ""}">${x.tag ? `<span class="sgtag">${esc(x.tag)}</span>` : ""}${esc(x.say)}</div>`).join("")
+      : `<div class="note">${call.recording ? "ההצעה הראשונה תגיע אחרי רבע הדקה הראשונה של דיבור." : "ההצעות עובדות רק כשהשיחה מוקלטת, במצב הקשבה."}</div>`)
+    + (ch && ch.msg ? `<div class="msg">${esc(ch.msg)}</div>` : "");
+}
+async function transcribeRecording(id, btn){
+  const path = btn.dataset.stt, a = audioMeta(rec(id), path);
+  btn.disabled = true; btn.textContent = "מתמלל…";
+  const res = await callFn("transcribe", {path, at: a.at, dur: a.dur}, 150000);
+  if (!res.id){ btn.disabled = false;
+    btn.textContent = res.error === "missing_key" ? "המפתח של OpenAI עוד לא הודבק בשרת" : res.detail === "too_long" ? "ההקלטה ארוכה מדי לתמלול אחד" : "התמלול נכשל. נסה שוב"; return; }
+  delete trCache[res.id];
+  edit(id, r => { r.calls = (r.calls || []).map(x => x.audio && x.audio.path === path ? {...x, audio: {...x.audio, atr: res.id}} : x); });
+  if (id === selId && !summaryOpen) renderDetail();
+}
 
 // ---------- summary with Claude (copy / paste) ----------
 const KIND_LABEL = l => l.track === "ראשית" ? "שיחת היכרות (לא מוכרים לפני שעלה כאב, היעד: דמו ביום ושעה)" : "שיחת מכירה (היעד: 4 פרטים לדמו, ובשיחת המשך: סגירה)";
