@@ -87,3 +87,11 @@ create policy transcripts_read on public.transcripts for select to authenticated
 create policy transcripts_insert on public.transcripts for insert to authenticated with check (public.is_member());
 create policy transcripts_update on public.transcripts for update to authenticated using (public.is_member()) with check (public.is_member());
 create index if not exists transcripts_lead_idx on public.transcripts (lead_id);
+
+-- Call recordings (added 2026-10-27): a private bucket, one folder per lead (<lead id>/<call start>.webm).
+-- Members upload and read (through signed links); nobody overwrites or deletes from the app.
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('recordings', 'recordings', false, 52428800, array['audio/webm', 'audio/ogg', 'audio/mp4', 'audio/mpeg', 'audio/wav'])
+on conflict (id) do nothing;
+create policy recordings_read on storage.objects for select to authenticated using (bucket_id = 'recordings' and public.is_member());
+create policy recordings_insert on storage.objects for insert to authenticated with check (bucket_id = 'recordings' and public.is_member());

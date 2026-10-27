@@ -279,9 +279,10 @@ function liveHtml(l){
     <div class="inline">
       ${on ? `<button type="button" class="btn rec" id="callEnd">⏹ סיים שיחה</button><span class="calltime" id="callTime">${fmt(Date.now() - call.start)}</span>
         <button type="button" class="btn sm" id="listenToggle">${listening ? "⏸ עצור הקשבה" : "🎙 הקשב"}</button>
-        <span class="mic ${listening ? "on" : ""}" id="mic"><span class="dot"></span>${listening ? "מקשיב" : "לא מקשיב"}</span>`
+        <span class="mic ${listening ? "on" : ""}" id="mic"><span class="dot"></span>${listening ? "מקשיב" : "לא מקשיב"}</span>
+        <span class="recbadge ${call.recording ? "on" : ""}" id="recBadge">${recBadgeText()}</span>`
       : `<button type="button" class="btn primary" id="callStart">🎙 התחל שיחה והקשב</button><button type="button" class="btn sm" id="callManual">▶ מצב שיחה בלי הקשבה</button>
-        <span class="note">האייפון על רמקול ליד המחשב, בחדר שקט. התמלול נשמר ביומן של העסק.</span>`}
+        <span class="note">האייפון על רמקול ליד המחשב, בחדר שקט. השיחה מוקלטת, וההקלטה והתמלול נשמרים בכרטיס. <b>לומר לצד השני שהשיחה מוקלטת.</b></span>`}
     </div>
     ${call && !on ? `<div class="inline"><span class="note">יש שיחה פתוחה עם ${esc(DATA.find(x => x.id === call.id)?.name || "")}. שיחה חדשה כאן תסגור ותשמור אותה.</span><button type="button" class="btn sm" id="callGoto">חזור אליה</button></div>` : ""}
     ${chips}
@@ -300,7 +301,7 @@ function renderDetail(){
     + (l.phoneMismatch ? `<div class="watch"><b>המספר באתר של העסק שונה מהמספר הרשום בגוגל.</b> להתקשר קודם למספר מהאתר (נבדק ${esc(l.phoneCheckDate || "")}).</div>` : "")
     + (l.phoneCheckNote ? `<div class="note">${esc(l.phoneCheckNote)}</div>` : "")
     + (l.virtual07 ? `<div class="note">המספר הרשום הוא קו 07 וירטואלי. לרוב הוא מגיע למוקד או להפניה, ולא לבעל העסק, ולכן הליד בסוף התור.</div>` : "");
-  const trs = (r.calls || []).filter(x => x.tr).slice(-6).reverse();
+  const trs = (r.calls || []).filter(x => x.tr).slice(-6).reverse(), recs = (r.calls || []).filter(x => x.audio).slice(-6).reverse();
   const links = [l.website && `<a href="${esc(l.website)}" target="_blank" rel="noopener noreferrer">אתר העסק</a>`, l.maps && `<a href="${esc(l.maps)}" target="_blank" rel="noopener noreferrer">גוגל מפס</a>`,
     l.post && `<a href="${esc(l.post)}" target="_blank" rel="noopener noreferrer">הפוסט בפייסבוק</a>`, l.groupUrl && `<a href="${esc(l.groupUrl)}" target="_blank" rel="noopener noreferrer">הקבוצה: ${esc(l.group)}</a>`].filter(Boolean).join("");
   const meta = l.src === "g" ? `ציון התאמה ${esc(l.score)} · ${esc(l.niche)} (נישה ${esc(l.track)}) · ${l.rating ? `גוגל ${esc(l.rating)} מתוך ${esc(l.reviews)} ביקורות` : "בלי דירוג בגוגל"}` : `פייסבוק · נישה ${esc(l.track)} · פורסם ${esc(l.date)}`;
@@ -342,6 +343,8 @@ function renderDetail(){
     <section class="box"><h3>מחשבון: כמה הוא מפסיד בחודש</h3>${calcHtml(l)}</section>
     <section class="box" id="fillBox"><h3>מה היה בשיחה, וסיכום עם Claude</h3>
       <div class="note">כאן כותבים מה היה בשיחה, ונשמר אוטומטית. אחרי שיחה במצב הקשבה, התמלול נכנס לכאן לבד, ונשמר גם ב"תמלולי שיחות". לסיכום: "העתק ל-Claude", מדביקים בצ'אט של Claude, ומעתיקים לכאן את התשובה. שום דבר לא נכנס לטופס לפני שאתה מאשר.</div>
+      ${recWarn[l.id] ? `<div class="msg">${esc(recWarn[l.id])}</div>` : ""}
+      ${recs.length ? `<div class="trlog"><div class="note">הקלטות שיחה</div>${recs.map(x => recRow(x.audio)).join("")}</div>` : ""}
       ${trs.length ? `<div class="trlog"><div class="note">תמלולי שיחות</div>${trs.map(x => `<details class="trd" data-tr="${esc(x.tr)}"><summary>${fmtDT(x.at)} · ${call && call.trId === x.tr ? "בשיחה עכשיו" : x.dur ? fmt(x.dur * 1000) + " דקות" : "השיחה נקטעה"}</summary><div class="trbody">טוען…</div></details>`).join("")}</div>` : ""}
       <label for="f-transcript" class="note">מה היה בשיחה / תמלול ${sv(l, "callText")}</label>
       <textarea id="f-transcript" placeholder="מה היה בשיחה, במילים שלך, או התמלול">${esc(r.callText || "")}</textarea>
@@ -385,15 +388,16 @@ function logHtml(l){
   const line = x => `${fmtDT(x.at)} · ניסיון ${esc(x.attempt || "?")}${x.kind ? " · " + esc(x.kind) : ""}${x.passed20 ? " · 20 שניות: " + esc(x.passed20) : ""}${x.demoHeard === "כן" ? " · שמע דמו" : ""}${x.nextAt ? " · המשך " + fmtDT(x.nextAt) : x.closed ? " · נסגר" : ""}`;
   return `<div class="note">שש שורות, דקה אחרי כל שיחה. כל שיחה נשמרת כרישום נפרד עם תאריך, והטיוטה נשמרת בזמן שכותבים.</div>
     ${LOG_ROWS.map((row, i) => `<div class="logrow"><span class="lognum">${i + 1}</span><div class="form">${row.map(field).join("")}</div></div>`).join("")}
+    ${d.audio ? `<div class="logrow"><span class="lognum">🎧</span><div><div class="note">ההקלטה של השיחה מצורפת לרישום ${sv(l, "audio")}</div>${recRow(audioMeta(rec(l.id), d.audio))}</div></div>` : ""}
     <div class="inline"><button type="button" class="btn sm primary" id="logSave">שמור רישום לשיחה הזו</button>${sv(l, "logSaved")}<span class="note" id="logMsg"></span></div>
-    ${logs.length ? `<div class="loglist"><div class="note">רישומים קודמים (${logs.length})</div>${logs.map(x => `<details class="trd"><summary>${line(x)}</summary><div class="trbody">${LOG_FIELDS.filter(([k]) => x[k]).map(([k, label]) => `<div><span class="k">${label}:</span> ${esc(k === "nextAt" ? fmtDT(x[k]) : x[k])}</div>`).join("")}${x.status ? `<div><span class="k">סטטוס בלוח:</span> ${esc(SLABEL[x.status] || x.status)}</div>` : ""}</div></details>`).join("")}</div>` : ""}`;
+    ${logs.length ? `<div class="loglist"><div class="note">רישומים קודמים (${logs.length})</div>${logs.map(x => `<details class="trd"><summary>${line(x)}</summary><div class="trbody">${LOG_FIELDS.filter(([k]) => x[k]).map(([k, label]) => `<div><span class="k">${label}:</span> ${esc(k === "nextAt" ? fmtDT(x[k]) : x[k])}</div>`).join("")}${x.status ? `<div><span class="k">סטטוס בלוח:</span> ${esc(SLABEL[x.status] || x.status)}</div>` : ""}${x.audio ? recRow(audioMeta(rec(l.id), x.audio)) : ""}</div></details>`).join("")}</div>` : ""}`;
 }
 function saveLog(){
   const l = DATA.find(x => x.id === selId); if (!l) return;
   const d = logDraftOf(l), defs = logDefaults(l);
   if (!LOG_FIELDS.some(([k]) => String(d[k] ?? "").trim() && d[k] !== defs[k])){ $("#logMsg").textContent = "הרישום ריק. ממלאים לפחות שורה אחת."; return; }
   const entry = {id: Date.now().toString(36), at: new Date().toISOString(), by: user.email, status: rec(l.id).status,
-    ...Object.fromEntries(LOG_FIELDS.map(([k]) => [k, String(d[k] ?? "").trim()]).filter(([, v]) => v))};
+    ...Object.fromEntries(LOG_FIELDS.map(([k]) => [k, String(d[k] ?? "").trim()]).filter(([, v]) => v)), ...(d.audio ? {audio: d.audio} : {})};
   edit(l.id, r => { r.logs = [...(r.logs || []), entry].slice(-60); r.logDraft = {}; }, 0, "logSaved");
   renderDetail(); renderStats();
   document.getElementById("logBox")?.scrollIntoView({block: "nearest"});
@@ -462,6 +466,10 @@ $("#detail").addEventListener("click", async e => {
   if (t.closest("#callStart")){ startCall(true); return; }
   if (t.closest("#callManual")){ startCall(false); return; }
   if (t.closest("#callEnd")){ endCall(); return; }
+  const pl = t.closest("[data-play]");
+  if (pl){ const au = pl.parentElement.querySelector("audio"), url = await signedUrl(pl.dataset.play); if (!url){ pl.textContent = "לא נמצא"; return; } au.hidden = false; au.src = url; au.play().catch(() => {}); return; }
+  const dl = t.closest("[data-dl]");
+  if (dl){ const url = await signedUrl(dl.dataset.dl, true); if (!url){ dl.textContent = "לא נמצא"; return; } const a = document.createElement("a"); a.href = url; a.rel = "noopener"; document.body.appendChild(a); a.click(); a.remove(); return; }
   if (t.closest("#logSave")){ saveLog(); return; }
   if (t.closest("#summaryClose")){ summaryOpen = false; if (selId) renderDetail(); else $("#detail").innerHTML = EMPTY_DETAIL; app.classList.toggle("showdetail", !!selId); return; }
   if (t.closest("#callGoto") && call){ selId = call.id; renderList(); renderDetail(); return; }
@@ -508,10 +516,10 @@ function startCall(listen){
   call = {id: selId, start: now, stages: new Set(), objections: new Set(), trId: selId + "__" + now,
     timer: setInterval(() => { const el = $("#callTime"); if (el && call) el.textContent = fmt(Date.now() - call.start); if (call && (Date.now() - call.start) > 4 * 60000) refreshChips(); }, 1000)};
   live = {listening: false, lines: [], interim: "", lastHit: {}, rec: null};
-  renderDetail(); if (listen) startListening();
+  renderDetail(); if (listen){ startListening(); startRecording(call); }
 }
 function endCall(){
-  const c = call; if (!c) return; stopListening();
+  const c = call; if (!c) return; stopListening(); const recP = stopRecording(c);
   if (live && live.interim){ live.lines.push({t: Date.now(), text: live.interim}); live.interim = ""; }
   const lines = live ? live.lines : [];
   c.end = Date.now(); clearInterval(c.timer); clearTimeout(c.trTimer); call = null; live = null;
@@ -521,11 +529,69 @@ function endCall(){
   edit(c.id, r => { const i = (r.calls || []).findIndex(x => x.tr && x.tr === c.trId);
     r.calls = i >= 0 ? r.calls.map((x, j) => j === i ? entry : x) : [...(r.calls || []), entry].slice(-20);
     if (d) r.callText = trText(d); }, 0, d ? "callText" : "");
+  c.entryAt = entry.at; recP.then(blob => { if (blob) uploadRecording(c, blob); });
   if (keep) saveTr(c, lines, "final").then(ok => { if (!ok) setSync("err", "התמלול לא נשמר בטבלת התמלולים. הוא שמור בכרטיס, בתיבה \"מה היה בשיחה\""); });
   if (c.id !== selId) return;
   renderDetail(); document.getElementById("fillBox")?.scrollIntoView({behavior: "smooth", block: "start"});
 }
 addEventListener("pagehide", () => stopListening());   // never leave the microphone listening behind a closed page
+
+// ---------- call recording ----------
+// While listening, a MediaRecorder keeps the call's audio as well. At the end of the call the file goes to the private
+// "recordings" bucket, in a folder per lead, and its path is kept on the call entry and on the post-call log draft.
+// If the upload fails, the file is downloaded to this computer instead, so a recording is never lost.
+const REC_TEXT = {starting: "מתחיל להקליט…", on: "● מקליט · לומר לצד השני שהשיחה מוקלטת", denied: "ההקלטה לא פועלת: Chrome לא קיבל גישה למיקרופון", unsupported: "הדפדפן הזה לא מקליט. פותחים ב-Chrome"};
+const recWarn = {};   // lead id -> why the last recording is on this computer and not on the server
+const recBadgeText = () => call ? (REC_TEXT[call.recording ? "on" : call.recState] || "") : "";
+function renderRecBadge(){ const b = $("#recBadge"); if (b && call){ b.textContent = recBadgeText(); b.classList.toggle("on", !!call.recording); } }
+async function startRecording(c){
+  if (!c) return;
+  if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder){ c.recState = "unsupported"; renderRecBadge(); return; }
+  c.recState = "starting"; renderRecBadge();
+  let stream;
+  try { stream = await navigator.mediaDevices.getUserMedia({audio: {echoCancellation: false, noiseSuppression: false, autoGainControl: true}}); }
+  catch { c.recState = "denied"; renderRecBadge(); return; }
+  if (call !== c){ stream.getTracks().forEach(t => t.stop()); return; }   // the call ended while Chrome was asking
+  const mime = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg;codecs=opus"].find(t => MediaRecorder.isTypeSupported(t)) || "";
+  const mr = new MediaRecorder(stream, {...(mime ? {mimeType: mime} : {}), audioBitsPerSecond: 32000});   // about 1.2 MB for 5 minutes
+  const chunks = []; mr.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
+  mr.start(1000);
+  c.recording = {mr, stream, chunks, mime: mr.mimeType || mime || "audio/webm"}; c.recState = "on"; renderRecBadge();
+}
+function stopRecording(c){
+  const r = c && c.recording; if (!r) return Promise.resolve(null);
+  c.recording = null;
+  return new Promise(res => {
+    const done = () => { r.stream.getTracks().forEach(t => t.stop()); res(r.chunks.length ? new Blob(r.chunks, {type: r.mime}) : null); };
+    if (r.mr.state === "inactive") done(); else { r.mr.onstop = done; try { r.mr.stop(); } catch { done(); } }
+  });
+}
+function downloadBlob(blob, name){
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 2000);
+}
+async function uploadRecording(c, blob){
+  const ext = blob.type.includes("mp4") ? "m4a" : blob.type.includes("ogg") ? "ogg" : "webm";
+  const stamp = new Date(c.start).toISOString().replace(/[:.]/g, "-"), path = `${c.id}/${stamp}.${ext}`;
+  const audio = {path, bytes: blob.size, type: blob.type, dur: Math.round((c.end - c.start) / 1000), at: new Date(c.start).toISOString()};
+  setSync("saving", "מעלה את ההקלטה…");
+  let error = null;
+  try { ({error} = await sb.storage.from("recordings").upload(path, blob, {contentType: blob.type, upsert: false})); } catch (e){ error = e; }
+  if (error){
+    const name = (DATA.find(x => x.id === c.id)?.name || "שיחה").replace(/[\\/:*?"<>|]/g, " ").slice(0, 40);
+    downloadBlob(blob, `${name} ${stamp}.${ext}`);
+    recWarn[c.id] = `ההקלטה של השיחה מ-${fmtDT(audio.at)} לא נשמרה בשרת, ולכן הורדה למחשב (תיקיית ההורדות): ${name} ${stamp}.${ext}`;
+    (chains.get(c.id) || Promise.resolve()).then(() => setSync("err", "ההקלטה לא נשמרה בשרת, ולכן הורדה למחשב"));
+    if (c.id === selId && !summaryOpen) renderDetail(); return;
+  }
+  edit(c.id, r => { r.calls = (r.calls || []).map(x => x.at === c.entryAt ? {...x, audio} : x); r.logDraft = {...(r.logDraft || {}), audio: path}; }, 0, "audio");
+  if (c.id === selId && !summaryOpen) renderDetail();
+}
+const audioMeta = (r, path) => (r.calls || []).map(x => x.audio).find(a => a && a.path === path) || {path};
+const recRow = a => `<div class="recrow"><span>${a.at ? fmtDT(a.at) : "הקלטה"}${a.dur ? " · " + fmt(a.dur * 1000) : ""}</span><button type="button" class="btn sm" data-play="${esc(a.path)}">▶ נגן</button><button type="button" class="btn sm" data-dl="${esc(a.path)}">הורד</button><audio controls preload="none" hidden></audio></div>`;
+async function signedUrl(path, download){
+  try { const {data, error} = await sb.storage.from("recordings").createSignedUrl(path, 3600, download ? {download: path.split("/").pop()} : undefined); return error ? null : data.signedUrl; } catch { return null; }
+}
 
 // ---------- transcripts ----------
 // One row per call in "transcripts", apart from the lead records, so the live list stays small.
