@@ -35,30 +35,14 @@ const FORM = [
   ["demoDate","מועד הדמו","datetime"],["quote","ציטוט אחד מילה במילה","area"],
   ["pain","ציון כאב 0–3 (0 = אין בעיה, 3 = מפסיד לידים וכבר ניסה לפתור)","radio",["0","1","2","3"]],
   ["feedback","משוב: מה עבד ומה לא, בתסריט או בעוזר","area"]];
-const STAGES = {
-  discovery: [["פתיחה",["תופס אותך","זמן טוב","שמי פול","מדבר פול"]],["תיאום ציפיות",["מקובל","המטרה של השיחה","כמה שאלות"]],["היכרות",["כמה זמן אתה","כמה שנים","לבד או עם","באיזה אזור"]],["בירור צרכים",["מי עונה","כמה פניות","ביקורי מדידה","אחוז סגירה","עסקה ממוצעת","משלם על לידים","מידרג"]],["שאלות פער",["פעם האחרונה","לא יכולת לענות","מתחרה","פספסת","לא ענית"]],["מה ניסית",["ניסית","מה היית עושה אחרת"]],["כאב ולמה",["כמה זה עולה לך","חצי שנה","דווקא עכשיו","משפיע עליך"]],["כסף ומי מחליט",["מחליט לבד","עם עוד מישהו","כמה אתה משלם היום"]],["שיקוף",["הבנתי נכון","לוודא שהבנתי"]],["מעבר והצגה",["עוזרת דיגיטלית","יש פה התאמה"]],["וידוא וקביעת דמו",["במילים שלך","דמו","איך אתה ביום","מחר ב"]]],
-  sales: [["פתיחה",["תופס אותך","זמן טוב","חצי דקה","מדבר פול"]],["תיאום ציפיות",["מקובל","שתיים שלוש שאלות","שאלות על מה קורה"]],["היכרות וכאב",["כמה זמן אתה","באמצע עבודה","מה קורה עם השיחה","מצא מישהו אחר"]],["חישוב חי",["כמה שיחות בשבוע","כמה הולכות","כמה שווה","בחודש שהולכים"]],["מי מחליט",["מחליט לבד","יש עוד מישהו","אשתך"]],["שיקוף",["הבנתי נכון","שאני אוודא"]],["מה זה אלה",["מזכירה AI","קוראים לה אלה","בשם העסק שלך"]],["4 פרטים ודמו",["20 דקות","4 פרטים","ארבעה פרטים","לינק בוואטסאפ"]],["הצעה וסגירה",["מחיר פיילוט","איך נוח לך לשלם","החודש עליי","המלצה של 30"]]]
-};
-const MUST = {discovery: ["כאב ולמה","כסף ומי מחליט","שיקוף","וידוא וקביעת דמו"], sales: ["חישוב חי","מי מחליט","שיקוף","4 פרטים ודמו"]};
-const OBJ = [
-  [["לא מעוניין","לא רלוונטי","תוריד אותי","אל תתקשר"], ["לא מעוניין"]],
-  [["אני עסוק","עסוק עכשיו","תחזור אליי","באמצע עבודה","לא יכול לדבר"], ["עסוק"]],
-  [["תשלח לי","שלח לי","בוואטסאפ","כמה זה עולה","מה המחיר","כמה עולה"], ["וואטסאפ","כמה זה עולה"]],
-  [["מזכירה","אשתי עונה","יש לי מוקד","מוקד","מישהו עונה לי"], ["מזכירה"]],
-  [["יקר","הרבה כסף","אין לי תקציב","לא שווה את"], ["יקר"]],
-  [["אין לי זמן","אין זמן לזה","אין לי כוח"], ["אין לי זמן"]],
-  [["לחשוב על זה","אני אחשוב","צריך לחשוב"], ["לחשוב"]],
-  [["להתייעץ","לדבר עם אשתי","עם השותף","השותף שלי"], ["להתייעץ"]],
-  // before the robot group, so "יש לי בוט" (he already has one) gets the answer about the system he has, not the one about robots
-  [["יש לי מערכת","כבר יש לי","יש לי בוט","יש לי מענה","מענה קולי"], ["כבר יש לי מערכת"]],
-  [["רובוט","בוט","מכונה","לא ידברו","מי מבטיח","לא יעבוד"], ["רובוט"]],
-  [["ניסיתי","כבר ניסינו","לא עבד לי"], ["ניסיתי"]],
-  [["אחרי העונה","לא עכשיו","בעוד חודש","בהמשך","אחרי החגים"], ["לא עכשיו","אחרי העונה"]],
-  [["פרטיות","מקליטים","הקלטה"], ["פרטיות"]],
-  [["תטעה","טעות"], ["תטעה"]],
-  // Facebook leads offer (Ofek, round 8): the blocks live in the sales and short scripts
-  [["פייסבוק","תגובות","מסנג'ר","פרטים בפרטי"], ["פייסבוק"]],
-  [["קבוצות","בקבוצה","לסרוק"], ["קבוצות"]]];
+// Short names for the summary fields, for the "מה ידוע עליו" box.
+const SHORT = {staff: "מי עונה לטלפון", visits: "ביקורים בשבוע", close: "אחוז סגירה", deal: "עבודה ממוצעת", sources: "מאיפה הלידים", missed: "שיחות שהוא מפספס",
+  calc: "כמה זה עולה לו בחודש", story: "סיפור על ליד שאבד", tried: "מה ניסה", calendar: "איפה רושם ביקורים", decider: "מי מחליט", goal: "מה הוא רוצה",
+  price: "מחיר שהוצג", reaction: "תגובה למחיר", objection: "ההתנגדות העיקרית", demo: "דמו", demoDate: "מועד הדמו", quote: "ציטוט", pain: "ציון כאב", feedback: "משוב"};
+// How far along a lead is. An automatic status after a call never moves a lead backwards (a booked demo stays a demo).
+const RANK = {new: 0, noanswer: 1, voicemail: 1, callback: 2, notrelevant: 2, done: 3, booked: 3, demo: 4, won: 5, dnc: 6};
+// Which script the live call follows. The choice is remembered on this computer, per track.
+const SCRIPT_NAMES = {discovery: "תסריט ההיכרות", sales: "תסריט המכירה", short: "התסריט הקצר (גרסה 3)"};
 
 // ---------- state ----------
 let DATA = [], SCRIPTS = {discovery: "", sales: ""}, user = null, isAdmin = false, selId = null, channel = null, readOnly = false;
@@ -66,17 +50,29 @@ const byId = {}, timers = new Map(), chains = new Map();
 const pendingKeys = new Map();   // lead id -> fields edited since the last save
 const inflight = new Map();      // lead id -> saves on their way to the server
 const fieldState = new Map();    // lead id -> {field: "saving" | "saved" | "error"}, shown as "נשמר ✓" beside each field
-let call = null;           // {id, start, end, stages:Set, objections:Set, timer, trId, trTimer, trChain, indexed}
-let live = null;           // {rec, listening, lines:[], interim, lastHit:{}}
-let pendingFill = null;
+let call = null;           // {id, start, end, model, view, done:Set, objections:Set, heard, cursor, facts, timer, trId, trTimer, trChain, indexed, endAt}
+let live = null;           // {rec, listening, lines:[], interim, lastSpeechAt, byeAt, toneAt}
 const trCache = {};        // transcript id -> loaded transcript
+const editOpen = new Set();   // leads whose full edit form is open
+const models = new Map();     // "script:kind" -> the parsed script (Engine.parseScript)
 const blank = () => ({status: "new", attempts: 0, notes: "", callback: "", summary: {}, history: []});
 const rec = id => byId[id] || blank();
 const trackKind = l => l.track === "ראשית" ? "discovery" : "sales";
-const scriptFor = l => l.track === "ראשית" ? SCRIPTS.discovery : SCRIPTS.sales;
-const norm = s => String(s).replace(/[״"'׳.,!?]/g, " ").replace(/\s+/g, " ").trim();
-const has = (t, k) => k.length <= 4 ? new RegExp("(^| )[והבלמשכ]?" + k + "( |$)").test(t) : t.includes(k);
-const fmt = ms => { const s = Math.max(0, Math.floor(ms / 1000)); return String(Math.floor(s / 60)).padStart(2, "0") + ":" + String(s % 60).padStart(2, "0"); };
+const scriptKeys = l => [l.track === "ראשית" ? "discovery" : "sales", ...(SCRIPTS.short ? ["short"] : [])];
+function scriptPick(l){
+  const keys = scriptKeys(l); let p = ""; try { p = localStorage.getItem("script:" + trackKind(l)) || ""; } catch {}
+  return keys.includes(p) ? p : (l.track !== "ראשית" && SCRIPTS.short ? "short" : keys[0]);
+}
+// The chosen script, plus the objection answers it lacks from the other scripts (the short script has no "יקר", for one).
+function modelFor(l){
+  const pick = scriptPick(l), k = pick + ":" + kindOf(l); if (models.has(k)) return models.get(k);
+  const m = Engine.parseScript(SCRIPTS[pick] || "", kindOf(l)), have = new Set(m.objections.flatMap(o => o.kws));
+  for (const other of ["short", "sales", "discovery"].filter(x => x !== pick && SCRIPTS[x]))
+    for (const o of Engine.parseScript(SCRIPTS[other], kindOf(l)).objections)
+      if (!o.kws.some(w => have.has(w))){ m.objections.push({...o, id: m.objections.length}); o.kws.forEach(w => have.add(w)); }
+  models.set(k, m); return m;
+}
+const fmt =ms => { const s = Math.max(0, Math.floor(ms / 1000)); return String(Math.floor(s / 60)).padStart(2, "0") + ":" + String(s % 60).padStart(2, "0"); };
 const fmtDT = s => { if (!s) return ""; const d = new Date(s); return isNaN(d) ? s : d.toLocaleString("he-IL", {day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit"}); };
 function setSync(kind, text){ $("#sync").className = "sync " + kind; $("#syncText").textContent = text; }
 function telOf(p){ let d = String(p).replace(/\D/g, ""); if (!d) return ""; if (d.startsWith("1800")) return "tel:" + d; if (d.startsWith("972")) d = d.slice(3); else if (d.startsWith("0")) d = d.slice(1); return "tel:+972" + d; }
@@ -129,7 +125,7 @@ async function start(session){
     sb.from("leads").select("id,data").limit(5000),
     sb.from("calls").select("lead_id,rec").limit(5000)]);
   if (cfg.error || leads.error || calls.error){ setSync("err", "הטעינה נכשלה. רענן את הדף"); return; }
-  const scripts = (cfg.data || []).find(r => r.key === "scripts"); if (scripts) SCRIPTS = scripts.value;
+  const scripts = (cfg.data || []).find(r => r.key === "scripts"); if (scripts) SCRIPTS = scripts.value; models.clear();
   DATA = (leads.data || []).map(r => ({...r.data, id: r.id})).sort((a, b) => (a.order || 0) - (b.order || 0));
   for (const r of calls.data || []) byId[r.lead_id] = r.rec;
   buildFilters(); renderList();
@@ -273,36 +269,121 @@ function mdToHtml(md){
     else if (line.trim()) html += `<p>${inline(line)}</p>`; }
   return html + (inList ? "</ul>" : "");
 }
-function objBlocks(l){ const m = String(scriptFor(l) || "").match(/## [^\n]*טיפול בהתנגדויות[^\n]*\n([\s\S]*?)(?=\n## |$)/); if (!m) return [];
-  return m[1].split(/\n### /).slice(1).map(p => { const nl = p.indexOf("\n"); return {title: p.slice(0, nl).trim(), body: p.slice(nl + 1)}; }); }
-function objPanel(l){ const parts = objBlocks(l); if (!parts.length) return "";
-  return `<div class="objs"><div class="objs-h">התנגדות? פתח את התשובה</div>${parts.map((o, i) => `<details class="obj-d" id="obj-${i}"><summary>${esc(o.title)}</summary><div class="md">${mdToHtml(o.body)}</div></details>`).join("")}</div>`; }
-const kv = (k, v) => v ? `<div class="kv"><div class="k">${k}</div>${esc(v)}</div>` : "";
+const kv = (k, v, auto) => v ? `<div class="kv${auto ? " auto" : ""}"><div class="k">${k}${auto ? ` <span class="autotag" title="מולא אוטומטית מהשיחה">✦ מהשיחה</span>` : ""}</div>${esc(v)}</div>` : "";
+const shortName = n => String(n || "").split(/\s[-–|·]\s/)[0].slice(0, 40).trim();
+// The script's [placeholders], filled with what is known about the lead and what was heard so far in the call.
+function fillIn(text, l){
+  const f = (call && call.id === l.id && call.facts) || {}, own = String((l.brief && l.brief.owner) || "").split(" ")[0];
+  return String(text || "").replace(/\[([^\]]+)\]/g, (m, k) => {
+    k = k.trim();
+    if (k === "שם") return own || m;
+    if (/^(שם העסק|העסק)$/.test(k)) return shortName(l.name) || m;
+    if (/^(פרגולות|פרגולה|התחום|תחום)$/.test(k)) return l.niche || m;
+    if (k === "עיר") return l.area || m;
+    if (k === "X" && f.missed) return String(f.missed);
+    if (/עבודה × 4/.test(k) && f.deal) return ils(f.deal * 4).slice(1);
+    if (/שווי עסקה/.test(k) && f.deal) return ils(f.deal).slice(1);
+    return m; });
+}
+function briefHtml(l){
+  const b = l.brief || {}, hc = l.hotCard, li = (k, v) => v ? `<div class="bk"><div class="k">${k}</div><div>${esc(v)}</div></div>` : "";
+  const hot = hc ? `<div class="brief hot"><h3><span>כרטיס ${esc((l.tags || [])[0] || "חם")}</span>${l.priority ? `<span>מקום ${l.priority} בתור</span>` : ""}</h3><div class="in">
+      ${li("פרט מהאתר לפתיחה", hc.detail)}${hc.hook ? `<p class="opener">"${esc(hc.hook)}"</p>` : ""}
+      ${hc.obj ? `<div class="bk obj"><div class="k">ההתנגדות הצפויה, והתשובה מהתסריט</div><div><b>"${esc(hc.obj)}"</b></div><div>${esc(hc.ans || "")}</div></div>` : ""}
+      ${hc.wa ? `<div class="bk"><div class="k">לוואטסאפ, רק אחרי "כן" בשיחה${hc.general ? " · דמו כללי" : ""}</div><div class="inline"><span class="wa">${esc(hc.wa)}</span><button type="button" class="btn sm copy" data-ph="${esc(hc.wa)}">העתק</button></div></div>` : ""}</div></div>` : "";
+  const brief = (b.opener || b.gap1) ? `<div class="brief"><h3><span>תדריך 30 שניות · ${l.track === "ראשית" ? "שיחת היכרות" : "שיחת מכירה"}</span>${b.owner ? `<span>לבקש את: ${esc(b.owner)}</span>` : ""}</h3><div class="in">
+      ${b.opener ? `<p class="opener">"${esc(b.opener)}"</p>` : ""}${li("היכרות", b.rapport)}
+      ${(b.gap1 || b.gap2) ? `<div class="bk"><div class="k">שאלות שחושפות פער</div><ol class="qs">${[b.gap1, b.gap2].filter(Boolean).map(q => `<li>${esc(q)}</li>`).join("")}</ol></div>` : ""}
+      ${li("שאלת כאב", b.pain)}${li("משפט מעבר (רק אם עלה כאב)", b.bridge)}
+      ${b.obj ? `<div class="bk obj"><div class="k">ההתנגדות הצפויה</div><div><b>"${esc(b.obj)}"</b></div>${b.objReply ? `<div>${esc(b.objReply)}</div>` : ""}</div>` : ""}
+      ${b.watch ? `<div class="watch"><b>לשים לב:</b> ${esc(b.watch)}</div>` : ""}</div></div>` : "";
+  return hot + brief;
+}
+const suggestSwitch = () => `<label class="sugsw" for="suggestToggle"><input type="checkbox" id="suggestToggle" ${suggestOn ? "checked" : ""}> 💡 הצעות חיות: "מה להגיד עכשיו"<span class="note">כל רבע דקה, הדקה האחרונה נשלחת ל-OpenAI (תמלול) ול-Claude (הצעה). בלי מספרי טלפון.</span></label>`;
+// Before a call: one button. During a call: the cockpit (what to say now, the script's steps, the step's text, a few lines of transcript).
 function liveHtml(l){
   const on = call && call.id === l.id, listening = on && live && live.listening;
-  const kind = trackKind(l), late = on && (Date.now() - call.start) > 4 * 60000;
-  const chips = on ? `<div class="stages" id="stageChips">${STAGES[kind].map(([n]) => `<button type="button" class="stagechip ${call.stages.has(n) ? "done" : (late && MUST[kind].includes(n) ? "miss" : "")}" data-stage="${esc(n)}">${call.stages.has(n) ? "✓ " : ""}${esc(n)}</button>`).join("")}</div>` : "";
-  return `<section class="callbar ${on ? "on" : ""}" id="callbar">
-    <div class="inline">
-      ${on ? `<button type="button" class="btn rec" id="callEnd">⏹ סיים שיחה</button><span class="calltime" id="callTime">${fmt(Date.now() - call.start)}</span>
-        <button type="button" class="btn sm" id="listenToggle">${listening ? "⏸ עצור הקשבה" : "🎙 הקשב"}</button>
-        <span class="mic ${listening ? "on" : ""}" id="mic"><span class="dot"></span>${listening ? "מקשיב" : "לא מקשיב"}</span>
-        <span class="recbadge ${call.recording ? "on" : ""}" id="recBadge">${recBadgeText()}</span>`
-      : `<button type="button" class="btn primary" id="callStart">🎙 התחל שיחה והקשב</button><button type="button" class="btn sm" id="callManual">▶ מצב שיחה בלי הקשבה</button>
-        <span class="note">האייפון על רמקול ליד המחשב, בחדר שקט. השיחה מוקלטת, וההקלטה והתמלול נשמרים בכרטיס. <b>לומר לצד השני שהשיחה מוקלטת.</b></span>`}
-    </div>
-    ${PAID_ENGINE ? `<label class="sugsw" for="suggestToggle"><input type="checkbox" id="suggestToggle" ${suggestOn ? "checked" : ""}> 💡 הצעות חיות: "מה להגיד עכשיו"<span class="note">כל רבע דקה, הדקה האחרונה נשלחת ל-OpenAI (תמלול) ול-Claude (הצעה). בלי מספרי טלפון.</span></label>` : ""}
-    ${call && !on ? `<div class="inline"><span class="note">יש שיחה פתוחה עם ${esc(DATA.find(x => x.id === call.id)?.name || "")}. שיחה חדשה כאן תסגור ותשמור אותה.</span><button type="button" class="btn sm" id="callGoto">חזור אליה</button></div>` : ""}
-    ${on ? `<div class="suggest" id="suggestBox" aria-live="polite" hidden></div>` : ""}
-    ${chips}
-    <div id="liveObj"></div>
-    ${on && live ? `<div class="transcript" id="liveTranscript" aria-live="polite"></div>` : ""}
-    <div class="msg hidden" id="liveMsg"></div>
+  if (!on) return `<section class="callbar" id="callbar">
+    ${call ? `<div class="inline"><span class="note">יש שיחה פתוחה עם ${esc(DATA.find(x => x.id === call.id)?.name || "")}. שיחה חדשה כאן תסגור ותשמור אותה.</span><button type="button" class="btn sm" id="callGoto">חזור אליה</button></div>` : ""}
+    <div class="inline"><button type="button" class="btn primary big" id="callStart">🎙 התחל שיחה</button><button type="button" class="linkbtn" id="callManual">שיחה בלי הקלטה</button></div>
+    <div class="note">האייפון על רמקול ליד המחשב. בסוף השיחה הכל נשמר וממולא לבד. <b>לומר לצד השני שהשיחה מוקלטת.</b></div>
+    ${PAID_ENGINE ? suggestSwitch() : ""}
+    <div class="msg hidden" id="liveMsg"></div></section>`;
+  const keys = scriptKeys(l);
+  return `<section class="callbar on" id="callbar">
+    <div class="inline callhead"><button type="button" class="btn rec" id="callEnd">⏹ סיים שיחה</button><span class="calltime" id="callTime">${fmt(Date.now() - call.start)}</span>
+      <span class="mic ${listening ? "on" : ""}" id="mic"><span class="dot"></span>${listening ? "מקשיב" : "לא מקשיב"}</span>
+      <span class="recbadge ${call.recording ? "on" : ""}" id="recBadge">${recBadgeText()}</span>
+      <button type="button" class="linkbtn" id="listenToggle">${listening ? "השהה הקשבה" : "🎙 הקשב"}</button>
+      ${keys.length > 1 ? `<select id="scriptPick" aria-label="התסריט שהשיחה עוקבת אחריו">${keys.map(k => `<option value="${k}" ${k === scriptPick(l) ? "selected" : ""}>${SCRIPT_NAMES[k]}</option>`).join("")}</select>` : ""}</div>
+    <div class="endbanner" id="endBanner" role="status" hidden></div>
+    <div class="say" id="sayBox" aria-live="polite"></div>
+    <div class="heardfacts" id="heardFacts" hidden></div>
+    <nav class="steps" id="stepNav" aria-label="חלקי התסריט"></nav>
+    <div class="steppane" id="stepPane"></div>
+    ${PAID_ENGINE ? suggestSwitch() + `<div class="suggest" id="suggestBox" aria-live="polite" hidden></div>` : ""}
+    ${live ? `<div class="transcript mini" id="liveTranscript" aria-label="תמלול חי"></div>` : ""}
+    <div class="msg hidden" id="liveMsg"></div></section>`;
+}
+// After a call: what the board did by itself, with a way to undo it.
+function doneCard(l){
+  const r = rec(l.id), a = r.lastAuto; if (!a || a.hidden || Date.now() - new Date(a.at).getTime() > 12 * 3600000) return "";
+  const head = a.status ? `הסטטוס עודכן ל"${esc(SLABEL[a.status] || a.status)}"${a.callback ? `, ${fmtDT(a.callback)}` : ""}` : "הסטטוס נשאר כמו שהיה";
+  const filled = (a.keys || []).filter(k => SHORT[k]).map(k => SHORT[k]);
+  return `<div class="donecard" role="status"><div><b>✓ ${a.source === "transcript" ? "מולא מהתמלול" : "השיחה נשמרה ומולאה לבד"}.</b> ${head}.</div>
+    <div class="note">${filled.length ? `מולאו ${filled.length} פרטים: ${esc(filled.join(", "))}. הם מסומנים ✦.` : "לא זיהיתי בתמלול פרטים למילוי, אז השדות נשארו ריקים."}${a.logId ? " נוסף רישום אחרי שיחה." : ""}</div>
+    <div class="inline"><button type="button" class="linkbtn" id="autoUndo">בטל את המילוי</button><button type="button" class="linkbtn" id="autoHide">הסתר</button></div></div>`;
+}
+// What is known about the lead: the status, and only the summary fields that have something in them. The full form opens with "עריכה".
+function knownHtml(l){
+  const r = rec(l.id), sm = r.summary || {}, auto = new Set(r.autoKeys || []), open = editOpen.has(l.id);
+  const rows = FORM.filter(([k]) => String(sm[k] ?? "").trim()).map(([k, label]) => kv(SHORT[k] || label, k === "demoDate" ? fmtDT(sm[k]) : sm[k], auto.has(k))).join("");
+  const showCb = ["callback", "booked", "demo"].includes(r.status) || r.callback;
+  return `<section class="box known" id="knownBox">
+    <div class="knownhead"><h3>מה ידוע עליו</h3><button type="button" class="btn sm" id="editToggle" aria-expanded="${open}">${open ? "סגור עריכה" : "✎ עריכה"}</button></div>
+    ${doneCard(l)}
+    <div class="statusrow"><label for="f-status" class="note">סטטוס</label><select id="f-status">${STATUSES.map(([k, v]) => `<option value="${k}" ${r.status === k ? "selected" : ""}>${v}</option>`).join("")}</select>${sv(l, "status")}
+      ${showCb ? `<label for="f-callback" class="note">מועד</label><input type="datetime-local" id="f-callback" value="${esc(r.callback || "")}">${sv(l, "callback")}` : ""}
+      ${r.attempts ? `<span class="note">ניסיונות: ${r.attempts}</span>` : ""}</div>
+    ${r.status === "dnc" ? `<div class="watch">ביקש לא להתקשר. מחיקה מהרשימות דורשת "מאשר הרמטית".</div>` : ""}
+    ${rows ? `<div class="facts">${rows}</div>` : (open ? "" : `<div class="note">עוד אין פרטים מהשיחות. אחרי שיחה במצב הקשבה הם יתמלאו כאן לבד.</div>`)}
+    ${r.notes && !open ? `<div class="notesview"><div class="k">הערות</div>${esc(r.notes)}</div>` : ""}
+    ${open ? editHtml(l) : ""}
   </section>`;
+}
+function editHtml(l){
+  const r = rec(l.id), sm = r.summary || {}, P = PRICES[kindOf(l)];
+  const form = FORM.map(([k, label, type, opts]) => { const v = sm[k] ?? (k === "price" ? P.text : ""), mark = sv(l, "s:" + k);
+    if (type === "radio") return `<div class="f"><span>${label} ${mark}</span><span class="radios" role="radiogroup" aria-label="${label}">${opts.map((o, i) => `<label for="f-${k}-${i}"><input type="radio" id="f-${k}-${i}" name="f-${k}" value="${esc(o)}" ${v === o ? "checked" : ""}> ${esc(o)}</label>`).join("")}</span></div>`;
+    if (type === "area") return `<label class="f" for="f-${k}">${label} ${mark}<textarea id="f-${k}" data-f="${k}">${esc(v)}</textarea></label>`;
+    if (type === "datetime") return `<label class="f" for="f-${k}">${label} ${mark}<input type="datetime-local" id="f-${k}" data-f="${k}" value="${esc(v)}"></label>`;
+    return `<label class="f" for="f-${k}">${label} ${mark}<input type="text" id="f-${k}" data-f="${k}" value="${esc(v)}"></label>`; }).join("");
+  return `<div class="editarea">
+    <div class="price">${esc(P.text)} את המחיר אומרים רק בסוף, ורק אם עלה כאב ממשי.</div>
+    <div class="form">${form}</div>
+    <label for="f-notes" class="note">הערות ${sv(l, "notes")}</label><textarea id="f-notes" placeholder="מה חשוב לזכור לשיחה הבאה">${esc(r.notes || "")}</textarea>
+    <h4>מחשבון: כמה הוא מפסיד בחודש</h4>${calcHtml(l)}
+    <h4>רישום אחרי שיחה (שש השורות)</h4>${logEditHtml(l)}
+    <label for="f-transcript" class="note">מה היה בשיחה, במילים שלך או תמלול ${sv(l, "callText")}</label><textarea id="f-transcript" placeholder="למשל אחרי שיחה בלי הקלטה: מה הוא אמר, מספרים, מתי לחזור">${esc(r.callText || "")}</textarea>
+    <div class="inline"><button type="button" class="btn sm" id="fillFromText">מלא את הפרטים מהטקסט הזה</button><span class="note" id="fillMsg"></span></div>
+  </div>`;
+}
+// Calls, recordings, transcripts and post-call logs from before, folded away.
+function historyHtml(l){
+  const r = rec(l.id), trs = (r.calls || []).filter(x => x.tr).slice(-8).reverse(), recs = (r.calls || []).filter(x => x.audio).slice(-8).reverse();
+  const logs = (r.logs || []).slice().reverse(), hist = (r.history || []).slice(-8).reverse(), n = Math.max(trs.length, recs.length, logs.length);
+  if (!n && !hist.length) return "";
+  const line = x => `${fmtDT(x.at)} · ניסיון ${esc(x.attempt || "?")}${x.kind ? " · " + esc(x.kind) : ""}${x.passed20 ? " · 20 שניות: " + esc(x.passed20) : ""}${x.demoHeard === "כן" ? " · שמע דמו" : ""}${x.nextAt ? " · המשך " + fmtDT(x.nextAt) : x.closed ? " · נסגר" : ""}${x.auto ? " · ✦" : ""}`;
+  return `<details class="more" id="histBox"><summary>שיחות קודמות ורישומים${n ? ` (${n})` : ""}</summary><div class="morein">
+    ${recs.length ? `<div class="trlog"><div class="note">הקלטות</div>${recs.map(x => recRow(audioMeta(r, x.audio.path))).join("")}</div>` : ""}
+    ${trs.length ? `<div class="trlog"><div class="note">תמלולים</div>${trs.map(x => `<details class="trd" data-tr="${esc(x.tr)}"><summary>${fmtDT(x.at)} · ${call && call.trId === x.tr ? "בשיחה עכשיו" : x.dur ? fmt(x.dur * 1000) + " דקות" : "השיחה נקטעה"}</summary><div class="trbody">טוען…</div></details>`).join("")}</div>` : ""}
+    ${logs.length ? `<div class="loglist"><div class="note">רישומים אחרי שיחה (${logs.length})</div>${logs.map(x => `<details class="trd"><summary>${line(x)}</summary><div class="trbody">${LOG_FIELDS.filter(([k]) => x[k]).map(([k, label]) => `<div><span class="k">${label}:</span> ${esc(k === "nextAt" ? fmtDT(x[k]) : x[k])}</div>`).join("")}${x.status ? `<div><span class="k">סטטוס בלוח:</span> ${esc(SLABEL[x.status] || x.status)}</div>` : ""}${x.audio ? recRow(audioMeta(r, x.audio)) : ""}</div></details>`).join("")}</div>` : ""}
+    ${hist.length ? `<div class="note">שינויי סטטוס</div><ul class="hist">${hist.map(h => `<li>${fmtDT(h.t)}: ${esc(SLABEL[h.s] || h.s)}${h.auto ? " (אוטומטי)" : h.undo ? " (בוטל מילוי)" : ""}</li>`).join("")}</ul>` : ""}
+  </div></details>`;
 }
 function renderDetail(){
   const l = DATA.find(x => x.id === selId); if (!l) return; summaryOpen = false;
-  const r = rec(l.id), sm = r.summary || {}, b = l.brief || {};
+  const on = call && call.id === l.id;
   const dial = dialList(l).map(([p, lbl], i) => l.noDial
     ? `<span class="dialrow"><span class="call off" aria-disabled="true">${esc(p)}</span><span class="lbl">לא לחייג</span></span>`
     : `<span class="dialrow"><a class="call ${i ? "alt" : ""}" href="${telOf(p)}" aria-label="חיוג ל-${esc(p)}">${esc(p)}</a><button type="button" class="btn sm copy" data-ph="${esc(p)}">העתק</button>${lbl ? `<span class="lbl">${lbl}</span>` : ""}</span>`).join("");
@@ -310,70 +391,26 @@ function renderDetail(){
     + (l.phoneMismatch ? `<div class="watch"><b>המספר באתר של העסק שונה מהמספר הרשום בגוגל.</b> להתקשר קודם למספר מהאתר (נבדק ${esc(l.phoneCheckDate || "")}).</div>` : "")
     + (l.phoneCheckNote ? `<div class="note">${esc(l.phoneCheckNote)}</div>` : "")
     + (l.virtual07 ? `<div class="note">המספר הרשום הוא קו 07 וירטואלי. לרוב הוא מגיע למוקד או להפניה, ולא לבעל העסק, ולכן הליד בסוף התור.</div>` : "");
-  const trs = (r.calls || []).filter(x => x.tr).slice(-6).reverse(), recs = (r.calls || []).filter(x => x.audio).slice(-6).reverse();
   const links = [l.website && `<a href="${esc(l.website)}" target="_blank" rel="noopener noreferrer">אתר העסק</a>`, l.maps && `<a href="${esc(l.maps)}" target="_blank" rel="noopener noreferrer">גוגל מפס</a>`,
     l.post && `<a href="${esc(l.post)}" target="_blank" rel="noopener noreferrer">הפוסט בפייסבוק</a>`, l.groupUrl && `<a href="${esc(l.groupUrl)}" target="_blank" rel="noopener noreferrer">הקבוצה: ${esc(l.group)}</a>`].filter(Boolean).join("");
-  const meta = l.src === "g" ? `ציון התאמה ${esc(l.score)} · ${esc(l.niche)} (נישה ${esc(l.track)}) · ${l.rating ? `גוגל ${esc(l.rating)} מתוך ${esc(l.reviews)} ביקורות` : "בלי דירוג בגוגל"}` : `פייסבוק · נישה ${esc(l.track)} · פורסם ${esc(l.date)}`;
-  const li = (k, v) => v ? `<div class="bk"><div class="k">${k}</div><div>${esc(v)}</div></div>` : "";
-  const brief = (b.opener || b.gap1) ? `<div class="brief"><h3><span>תדריך 30 שניות · ${l.track === "ראשית" ? "שיחת היכרות" : "שיחת מכירה"}</span>${b.owner ? `<span>לבקש את: ${esc(b.owner)}</span>` : ""}</h3><div class="in">
-      ${b.opener ? `<p class="opener">"${esc(b.opener)}"</p>` : ""}${li("היכרות", b.rapport)}
-      ${(b.gap1 || b.gap2) ? `<div class="bk"><div class="k">שאלות שחושפות פער</div><ol class="qs">${[b.gap1, b.gap2].filter(Boolean).map(q => `<li>${esc(q)}</li>`).join("")}</ol></div>` : ""}
-      ${li("שאלת כאב", b.pain)}${li("משפט מעבר (רק אם עלה כאב)", b.bridge)}
-      ${b.obj ? `<div class="bk obj"><div class="k">ההתנגדות הצפויה</div><div><b>"${esc(b.obj)}"</b></div>${b.objReply ? `<div>${esc(b.objReply)}</div>` : ""}</div>` : ""}
-      ${b.watch ? `<div class="watch"><b>לשים לב:</b> ${esc(b.watch)}</div>` : ""}</div></div>` : "";
-  const hc = l.hotCard;   // a day's call list card: opener detail, hook, likely objection, WhatsApp line
-  const hotBox = hc ? `<div class="brief hot"><h3><span>כרטיס ${esc((l.tags || [])[0] || "חם")}</span>${l.priority ? `<span>מקום ${l.priority} בתור</span>` : ""}</h3><div class="in">
-      ${li("פרט מהאתר לפתיחה", hc.detail)}${hc.hook ? `<p class="opener">"${esc(hc.hook)}"</p>` : ""}
-      ${hc.obj ? `<div class="bk obj"><div class="k">ההתנגדות הצפויה, והתשובה מהתסריט</div><div><b>"${esc(hc.obj)}"</b></div><div>${esc(hc.ans || "")}</div></div>` : ""}
-      ${hc.wa ? `<div class="bk"><div class="k">לוואטסאפ, רק אחרי "כן" בשיחה${hc.general ? " · דמו כללי" : ""}</div><div class="inline"><span class="wa">${esc(hc.wa)}</span><button type="button" class="btn sm copy" data-ph="${esc(hc.wa)}">העתק</button></div></div>` : ""}</div></div>` : "";
-  const P = PRICES[kindOf(l)];
-  const form = FORM.map(([k, label, type, opts]) => { const v = sm[k] ?? (k === "price" ? P.text : ""), mark = sv(l, "s:" + k);
-    if (type === "radio") return `<div class="f"><span>${label} ${mark}</span><span class="radios" role="radiogroup" aria-label="${label}">${opts.map((o, i) => `<label for="f-${k}-${i}"><input type="radio" id="f-${k}-${i}" name="f-${k}" value="${esc(o)}" ${v === o ? "checked" : ""}> ${esc(o)}</label>`).join("")}</span></div>`;
-    if (type === "area") return `<label class="f" for="f-${k}">${label} ${mark}<textarea id="f-${k}" data-f="${k}">${esc(v)}</textarea></label>`;
-    if (type === "datetime") return `<label class="f" for="f-${k}">${label} ${mark}<input type="datetime-local" id="f-${k}" data-f="${k}" value="${esc(v)}"></label>`;
-    return `<label class="f" for="f-${k}">${label} ${mark}<input type="text" id="f-${k}" data-f="${k}" value="${esc(v)}"></label>`; }).join("");
-  const scriptBoxes = (SCRIPTS.short ? `<details class="script"><summary>התסריט הקצר (גרסה 3), עם מחשבון</summary>${calcHtml(l)}<div class="md">${mdToHtml(SCRIPTS.short)}</div></details>` : "")
-    + `<details class="script"><summary>${l.track === "ראשית" ? "תסריט שיחת ההיכרות" : "תסריט שיחת המכירה"} (מלא), עם מחשבון</summary>${calcHtml(l)}<div class="md">${mdToHtml(scriptFor(l))}</div></details>`;
+  const meta = l.src === "g" ? `${esc(l.niche)} · ציון ${esc(l.score)}${l.rating ? ` · גוגל ${esc(l.rating)} (${esc(l.reviews)})` : ""}` : `פייסבוק · ${esc(l.niche)} · פורסם ${esc(l.date)}`;
+  const facts = [kv("מה העסק עושה", l.what), kv("ביקור מדידה חינם", l.free), kv("הבטחת זמן תגובה", l.resp), kv("וואטסאפ באתר", l.wa), kv("טופס באתר", l.form), kv("בעלים מפעיל", l.owner), kv("טלפון נוסף באתר", l.sitePhone), kv("הערות מהאיסוף", l.notes)].join("");
+  const scripts = scriptKeys(l).filter(k => SCRIPTS[k]).map(k => `<details class="script"><summary>${SCRIPT_NAMES[k]}, הטקסט המלא</summary><div class="md">${mdToHtml(SCRIPTS[k])}</div></details>`).join("");
   $("#detail").innerHTML = `
     <button type="button" class="btn sm back" id="back">→ חזרה לרשימה</button>
-    <div class="head"><div class="whois"><h2>${esc(l.name)}</h2>${(l.tags || []).length ? `<div class="tags">${l.tags.map(t => `<span class="tag">${esc(t)}${l.priority ? " · מקום " + l.priority + " בתור" : ""}</span>`).join("")}</div>` : ""}<div class="meta">${meta}</div><div class="meta">${esc(l.area || "אזור לא ידוע")}</div><div class="links">${links}</div></div><div class="dial">${dial || '<span class="meta">אין טלפון</span>'}</div></div>
+    <div class="head"><div class="whois"><h2>${esc(l.name)}</h2>${(l.tags || []).length ? `<div class="tags">${l.tags.map(t => `<span class="tag">${esc(t)}${l.priority ? " · מקום " + l.priority + " בתור" : ""}</span>`).join("")}</div>` : ""}<div class="meta">${meta} · ${esc(l.area || "אזור לא ידוע")}</div>${links ? `<div class="links">${links}</div>` : ""}</div><div class="dial">${dial || '<span class="meta">אין טלפון</span>'}</div></div>
     ${phoneNotes ? `<div class="phonenotes">${phoneNotes}</div>` : ""}
+    ${recWarn[l.id] ? `<div class="msg">${esc(recWarn[l.id])}</div>` : ""}
     ${liveHtml(l)}
-    ${hotBox}${brief}${objPanel(l)}
-    ${l.fit ? `<div class="fit"><b>למה מתאים לאלה:</b> ${esc(l.fit)}</div>` : ""}
-    <div class="facts">${kv("מה העסק עושה", l.what)}${kv("ביקור מדידה חינם", l.free)}${kv("הבטחת זמן תגובה", l.resp)}${kv("וואטסאפ באתר", l.wa)}${kv("טופס באתר", l.form)}${kv("בעלים מפעיל", l.owner)}${kv("טלפון נוסף באתר", l.sitePhone)}${kv("הערות מהאיסוף", l.notes)}</div>
-    <section class="box"><h3>סטטוס</h3>
-      <div class="statuses">${STATUSES.map(([k, v]) => `<button type="button" class="btn sm" data-st="${k}" aria-pressed="${r.status === k}">${v}</button>`).join("")}</div>
-      <div class="inline"><label for="f-callback" class="note">לחזור אליו / מועד:</label><input type="datetime-local" id="f-callback" value="${esc(r.callback || "")}">${sv(l, "callback")}<span class="note">ניסיונות: ${r.attempts || 0}</span></div>
-      <label for="f-notes" class="note">ההערות שלך ${sv(l, "notes")}</label><textarea id="f-notes" placeholder="מה עלה בשיחה, עם מי דיברת, מתי לחזור">${esc(r.notes || "")}</textarea>
-      ${r.status === "dnc" ? `<div class="watch">ביקש לא להתקשר. מחיקה מהרשימות דורשת "מאשר הרמטית".</div>` : ""}
-      ${(r.history || []).length ? `<ul class="hist">${r.history.slice(-6).reverse().map(h => `<li>${fmtDT(h.t)}: ${esc(SLABEL[h.s] || h.s)}</li>`).join("")}</ul>` : ""}
-    </section>
-    <section class="box"><h3>מחשבון: כמה הוא מפסיד בחודש</h3>${calcHtml(l)}</section>
-    <section class="box" id="fillBox"><h3>מה היה בשיחה, וסיכום עם Claude</h3>
-      <div class="note">כאן כותבים מה היה בשיחה, ונשמר אוטומטית. אחרי שיחה במצב הקשבה, התמלול נכנס לכאן לבד, ונשמר גם ב"תמלולי שיחות". לסיכום: "העתק ל-Claude", מדביקים בצ'אט של Claude, ומעתיקים לכאן את התשובה. שום דבר לא נכנס לטופס לפני שאתה מאשר.</div>
-      ${recWarn[l.id] ? `<div class="msg">${esc(recWarn[l.id])}</div>` : ""}
-      ${recs.length ? `<div class="trlog"><div class="note">הקלטות שיחה</div>${recs.map(x => recRow(audioMeta(r, x.audio.path))).join("")}</div>` : ""}
-      ${trs.length ? `<div class="trlog"><div class="note">תמלולי שיחות</div>${trs.map(x => `<details class="trd" data-tr="${esc(x.tr)}"><summary>${fmtDT(x.at)} · ${call && call.trId === x.tr ? "בשיחה עכשיו" : x.dur ? fmt(x.dur * 1000) + " דקות" : "השיחה נקטעה"}</summary><div class="trbody">טוען…</div></details>`).join("")}</div>` : ""}
-      <label for="f-transcript" class="note">מה היה בשיחה / תמלול ${sv(l, "callText")}</label>
-      <textarea id="f-transcript" placeholder="מה היה בשיחה, במילים שלך, או התמלול">${esc(r.callText || "")}</textarea>
-      <div class="inline"><button type="button" class="btn sm" id="copyPrompt">העתק ל-Claude</button><a class="btn sm" href="https://claude.ai/new" target="_blank" rel="noopener noreferrer">פתח את Claude</a><span class="note" id="fillMsg"></span></div>
-      <label for="f-answer" class="note">התשובה של Claude ${sv(l, "claudeAnswer")}</label>
-      <textarea id="f-answer" placeholder="הדבק כאן את התשובה של Claude">${esc(r.claudeAnswer || "")}</textarea>
-      <div class="inline"><button type="button" class="btn sm" id="parseAnswer">מלא את הטופס מהתשובה</button></div>
-      <div id="fillPreview"></div>
-    </section>
-    <section class="box" id="logBox"><h3>רישום אחרי שיחה</h3>${logHtml(l)}</section>
-    <section class="box"><h3>טופס סיכום שיחה</h3>
-      <div class="price">${esc(P.text)} את המחיר אומרים רק בסוף, ורק אם עלה כאב ממשי.</div>
-      <div class="form">${form}</div>
-    </section>
-    ${scriptBoxes}`;
-  renderTranscript(); renderLiveObj(); renderSuggest();
+    ${on ? "" : `${knownHtml(l)}${briefHtml(l)}
+      ${l.fit ? `<div class="fit"><b>למה מתאים לאלה:</b> ${esc(l.fit)}</div>` : ""}
+      ${facts ? `<div class="facts">${facts}</div>` : ""}
+      ${historyHtml(l)}${scripts}`}`;
+  renderTranscript(); renderCockpit(); renderSuggest(); renderEndBanner();
 }
 // ---------- post-call log: Ofek's six-line template (round 7) ----------
-// Each call is its own dated entry in rec.logs, so a new one never overwrites an earlier one.
-// The entry being written lives in rec.logDraft and is saved while typing, like every other field.
+// Each call is its own dated entry in rec.logs, so a new one never overwrites an earlier one. Since 27.10 the board writes
+// the entry by itself at the end of a listened call; "עריכה" opens it to fix or add, and saves while typing.
 // Ofek's letters run opposite to the calculator's (his א = repairs), so the form shows words instead.
 const LOG_ROWS = [
   [["attempt", "ניסיון", "radio", ["1", "2", "3"]], ["kind", "סוג", "radio", ["תיקונים", "פרויקטים"]], ["vm", "הודעה בתא הקולי", "radio", ["אין", "גרסה א (תיקונים)", "גרסה ב (פרויקטים)"]]],
@@ -384,32 +421,31 @@ const LOG_ROWS = [
   [["nextAt", "הצעד הבא: יום ושעה", "datetime"], ["closed", "או: למה נסגר", "text"], ["change", "מה הייתי משנה בתסריט (משפט אחד)", "text"]]];
 const LOG_FIELDS = LOG_ROWS.flat();
 let summaryOpen = false;
+const editLog = {};   // lead id -> the log entry open in the editor (the latest one by default)
 function logDefaults(l){ const s = rec(l.id).summary || {}; return {kind: kindOf(l) === "B" ? "תיקונים" : "פרויקטים", missed: s.calc_missed || "", job: +s.calc_deal ? ils(+s.calc_deal) : ""}; }
-const logDraftOf = l => ({...logDefaults(l), ...(rec(l.id).logDraft || {})});
-function logHtml(l){
-  const d = logDraftOf(l), logs = (rec(l.id).logs || []).slice().reverse();
+const draftLeft = r => r.logDraft && LOG_FIELDS.some(([k]) => String(r.logDraft[k] ?? "").trim());
+function logEditHtml(l){
+  const r = rec(l.id), logs = r.logs || [], id = logs.some(x => x.id === editLog[l.id]) ? editLog[l.id] : (logs.length ? logs[logs.length - 1].id : "");
+  const d = logs.find(x => x.id === id);
   const field = ([k, label, type, opts]) => { const v = d[k] ?? "", mark = sv(l, "log:" + k);
-    if (type === "radio") return `<div class="f"><span>${label} ${mark}</span><span class="radios" role="radiogroup" aria-label="${label}">${opts.map((o, i) => `<label for="log-${k}-${i}"><input type="radio" id="log-${k}-${i}" name="log-${k}" value="${esc(o)}" ${v === o ? "checked" : ""}> ${esc(o)}</label>`).join("")}</span></div>`;
-    const input = type === "datetime" ? `<input type="datetime-local" id="log-${k}" data-log="${k}" value="${esc(v)}">`
-      : type === "number" ? `<input type="number" inputmode="numeric" min="0" id="log-${k}" data-log="${k}" value="${esc(v)}">`
-      : `<input type="text" id="log-${k}" data-log="${k}" value="${esc(v)}">`;
+    if (type === "radio") return `<div class="f"><span>${label} ${mark}</span><span class="radios" role="radiogroup" aria-label="${label}">${opts.map((o, i) => `<label for="log-${k}-${i}"><input type="radio" id="log-${k}-${i}" name="log-${k}" data-logid="${esc(id)}" value="${esc(o)}" ${v === o ? "checked" : ""}> ${esc(o)}</label>`).join("")}</span></div>`;
+    const input = type === "datetime" ? `<input type="datetime-local" id="log-${k}" data-log="${k}" data-logid="${esc(id)}" value="${esc(v)}">`
+      : type === "number" ? `<input type="number" inputmode="numeric" min="0" id="log-${k}" data-log="${k}" data-logid="${esc(id)}" value="${esc(v)}">`
+      : `<input type="text" id="log-${k}" data-log="${k}" data-logid="${esc(id)}" value="${esc(v)}">`;
     return `<label class="f" for="log-${k}">${label} ${mark}${input}</label>`; };
-  const line = x => `${fmtDT(x.at)} · ניסיון ${esc(x.attempt || "?")}${x.kind ? " · " + esc(x.kind) : ""}${x.passed20 ? " · 20 שניות: " + esc(x.passed20) : ""}${x.demoHeard === "כן" ? " · שמע דמו" : ""}${x.nextAt ? " · המשך " + fmtDT(x.nextAt) : x.closed ? " · נסגר" : ""}`;
-  return `<div class="note">שש שורות, דקה אחרי כל שיחה. כל שיחה נשמרת כרישום נפרד עם תאריך, והטיוטה נשמרת בזמן שכותבים.</div>
-    ${LOG_ROWS.map((row, i) => `<div class="logrow"><span class="lognum">${i + 1}</span><div class="form">${row.map(field).join("")}</div></div>`).join("")}
-    ${d.audio ? `<div class="logrow"><span class="lognum">🎧</span><div><div class="note">ההקלטה של השיחה מצורפת לרישום ${sv(l, "audio")}</div>${recRow(audioMeta(rec(l.id), d.audio))}</div></div>` : ""}
-    <div class="inline"><button type="button" class="btn sm primary" id="logSave">שמור רישום לשיחה הזו</button>${sv(l, "logSaved")}<span class="note" id="logMsg"></span></div>
-    ${logs.length ? `<div class="loglist"><div class="note">רישומים קודמים (${logs.length})</div>${logs.map(x => `<details class="trd"><summary>${line(x)}</summary><div class="trbody">${LOG_FIELDS.filter(([k]) => x[k]).map(([k, label]) => `<div><span class="k">${label}:</span> ${esc(k === "nextAt" ? fmtDT(x[k]) : x[k])}</div>`).join("")}${x.status ? `<div><span class="k">סטטוס בלוח:</span> ${esc(SLABEL[x.status] || x.status)}</div>` : ""}${x.audio ? recRow(audioMeta(rec(l.id), x.audio)) : ""}</div></details>`).join("")}</div>` : ""}`;
+  const pick = logs.length > 1 ? `<select id="logPick" aria-label="איזה רישום לערוך">${logs.slice().reverse().map(x => `<option value="${esc(x.id)}" ${x.id === id ? "selected" : ""}>${fmtDT(x.at)}${x.auto ? " ✦" : ""}</option>`).join("")}</select>` : "";
+  return `${d ? `<div class="inline note">הרישום של ${fmtDT(d.at)}${d.auto ? ", מולא אוטומטית מהשיחה. אפשר לתקן כאן" : ""} ${pick}</div>
+      ${LOG_ROWS.map((row, i) => `<div class="logrow"><span class="lognum">${i + 1}</span><div class="form">${row.map(field).join("")}</div></div>`).join("")}
+      ${d.audio ? `<div class="logrow"><span class="lognum">🎧</span><div>${recRow(audioMeta(r, d.audio))}</div></div>` : ""}`
+    : `<div class="note">עוד אין רישום. הוא נוצר לבד בסוף כל שיחה במצב הקשבה.</div>`}
+    <div class="inline"><button type="button" class="btn sm" id="logNew">רישום חדש (לשיחה בלי הקשבה)</button>${draftLeft(r) ? `<button type="button" class="btn sm" id="logDraftSave">שמור את הטיוטה הישנה כרישום</button>` : ""}${sv(l, "logSaved")}</div>`;
 }
-function saveLog(){
-  const l = DATA.find(x => x.id === selId); if (!l) return;
-  const d = logDraftOf(l), defs = logDefaults(l);
-  if (!LOG_FIELDS.some(([k]) => String(d[k] ?? "").trim() && d[k] !== defs[k])){ $("#logMsg").textContent = "הרישום ריק. ממלאים לפחות שורה אחת."; return; }
-  const entry = {id: Date.now().toString(36), at: new Date().toISOString(), by: user.email, status: rec(l.id).status,
-    ...Object.fromEntries(LOG_FIELDS.map(([k]) => [k, String(d[k] ?? "").trim()]).filter(([, v]) => v)), ...(d.audio ? {audio: d.audio} : {})};
-  edit(l.id, r => { r.logs = [...(r.logs || []), entry].slice(-60); r.logDraft = {}; }, 0, "logSaved");
-  renderDetail(); renderStats();
-  document.getElementById("logBox")?.scrollIntoView({block: "nearest"});
+function newLog(l, fromDraft){
+  const r = rec(l.id), base = fromDraft ? {...logDefaults(l), ...(r.logDraft || {})} : logDefaults(l);
+  const entry = {id: Date.now().toString(36), at: new Date().toISOString(), by: user.email, status: r.status,
+    ...Object.fromEntries(Object.entries(base).map(([k, v]) => [k, String(v ?? "").trim()]).filter(([, v]) => v))};
+  edit(l.id, r => { r.logs = [...(r.logs || []), entry].slice(-60); if (fromDraft) r.logDraft = {}; }, 0, "logSaved");
+  editLog[l.id] = entry.id; renderDetail();
 }
 // After ten entries the summary answers Ofek's three questions; before that it shows the counts so far.
 const normText = s => String(s || "").replace(/[״"'׳.,!?…]/g, " ").replace(/\s+/g, " ").trim();
@@ -470,53 +506,63 @@ function refreshCalc(l, except){
 $("#detail").addEventListener("click", async e => {
   const t = e.target;
   if (t.closest("#back")){ app.classList.remove("showdetail"); return; }
-  const st = t.closest("[data-st]");
-  if (st && selId){ const s = st.dataset.st; edit(selId, r => { if (s === "noanswer" || s === "voicemail") r.attempts = (r.attempts || 0) + 1; r.status = s; r.history.push({t: new Date().toISOString(), s}); }); renderList(); renderDetail(); return; }
   if (t.closest("#callStart")){ startCall(true); return; }
   if (t.closest("#callManual")){ startCall(false); return; }
-  if (t.closest("#callEnd")){ endCall(); return; }
+  if (t.closest("#callEnd") || t.closest("#endNow")){ endCall(); return; }
+  if (t.closest("#endCancel") && call){ cancelEnd(call, true); return; }
   const pl = t.closest("[data-play]");
   if (pl){ const au = pl.parentElement.querySelector("audio"), url = await signedUrl(pl.dataset.play); if (!url){ pl.textContent = "לא נמצא"; return; } au.hidden = false; au.src = url; au.play().catch(() => {}); return; }
   const dl = t.closest("[data-dl]");
   if (dl){ const url = await signedUrl(dl.dataset.dl, true); if (!url){ dl.textContent = "לא נמצא"; return; } const a = document.createElement("a"); a.href = url; a.rel = "noopener"; document.body.appendChild(a); a.click(); a.remove(); return; }
   const stt = t.closest("[data-stt]");
   if (stt && selId && !stt.disabled){ transcribeRecording(selId, stt); return; }
-  if (t.closest("#logSave")){ saveLog(); return; }
   if (t.closest("#summaryClose")){ summaryOpen = false; if (selId) renderDetail(); else $("#detail").innerHTML = EMPTY_DETAIL; app.classList.toggle("showdetail", !!selId); return; }
   if (t.closest("#callGoto") && call){ selId = call.id; renderList(); renderDetail(); return; }
   const tf = t.closest("[data-trfill]");
-  if (tf && trCache[tf.dataset.trfill]){
-    const text = trText(trCache[tf.dataset.trfill]); edit(selId, r => { r.callText = text; }, 0, "callText");
-    const ta = $("#f-transcript"); if (ta) ta.value = text;
-    $("#fillBox")?.scrollIntoView({behavior: "smooth", block: "start"}); return;
-  }
+  if (tf && trCache[tf.dataset.trfill] && selId){ fillFromTranscript(selId, tf.dataset.trfill); return; }
+  if (t.closest("#fillFromText") && selId){ fillFromText(selId); return; }
   if (t.closest("#listenToggle")){ live && live.listening ? stopListening() : startListening(); renderDetail(); return; }
-  const sc = t.closest("[data-stage]"); if (sc && call){ const n = sc.dataset.stage; call.stages.has(n) ? call.stages.delete(n) : call.stages.add(n); refreshChips(); return; }
-  if (t.closest("#objClose")){ $("#liveObj").innerHTML = ""; return; }
-  if (t.closest("#copyPrompt")){ copyPrompt(); return; }
-  if (t.closest("#parseAnswer")){ parseAnswer(); return; }
-  if (t.closest("#fillApply")){ applyFill(); return; }
-  if (t.closest("#fillCancel")){ pendingFill = null; $("#fillPreview").innerHTML = ""; return; }
+  // the cockpit: jump to a step, step through the lines, open the objections / calculator / brief, close an objection
+  const sp = t.closest("[data-step]"); if (sp && call){ jumpTo(call, +sp.dataset.step, 0); return; }
+  const sy = t.closest("[data-say]"); if (sy && call){ stepLine(call, +sy.dataset.say); return; }
+  const pn = t.closest("[data-pane]"); if (pn && call){ call.view.pane = call.view.pane === pn.dataset.pane ? null : pn.dataset.pane; renderCockpit(); return; }
+  const op = t.closest("[data-objpick]"); if (op && call){ const o = call.model.objections[+op.dataset.objpick]; if (o){ call.view.obj = {o, kw: "", at: Date.now()}; call.view.pick = o.id; renderCockpit(); } return; }
+  if (t.closest("#objClose") && call){ call.view.obj = null; renderCockpit(); return; }
+  // after the call
+  if (t.closest("#editToggle") && selId){ editOpen.has(selId) ? editOpen.delete(selId) : editOpen.add(selId); renderDetail(); return; }
+  if (t.closest("#autoUndo") && selId){ undoAuto(selId); return; }
+  if (t.closest("#autoHide") && selId){ edit(selId, r => { if (r.lastAuto) r.lastAuto = {...r.lastAuto, hidden: true}; }); renderDetail(); return; }
+  if (t.closest("#logNew") && selId){ newLog(DATA.find(x => x.id === selId), false); return; }
+  if (t.closest("#logDraftSave") && selId){ newLog(DATA.find(x => x.id === selId), true); return; }
   const cp = t.closest(".copy");
   if (cp){ const done = ok => { cp.textContent = ok ? "הועתק" : "סמן והעתק"; setTimeout(() => cp.textContent = "העתק", 1600); };
     try { await navigator.clipboard.writeText(cp.dataset.ph); done(true); } catch { done(false); } }
 });
+// A field Paul types in is his: the automatic fill never overwrites it again, so its "✦ מהשיחה" mark goes away.
+const mine = (r, k) => { r.autoKeys = (r.autoKeys || []).filter(x => x !== k); };
+function setStatus(id, s){
+  edit(id, r => { if (s === "noanswer" || s === "voicemail") r.attempts = (r.attempts || 0) + 1; r.status = s; r.history.push({t: new Date().toISOString(), s}); }, 0, "status");
+  renderList(); renderDetail();
+}
+const editLogField = (id, logId, k, v, debounce) => edit(id, r => { r.logs = (r.logs || []).map(x => x.id === logId ? {...x, [k]: v} : x); }, debounce, "log:" + k);
 $("#detail").addEventListener("input", e => {
   const t = e.target; if (!selId) return;
   if (t.id === "suggestToggle") setSuggest(t.checked);
+  else if (t.id === "f-status") setStatus(selId, t.value);
+  else if (t.id === "scriptPick"){ try { localStorage.setItem("script:" + trackKind(DATA.find(x => x.id === selId)), t.value); } catch {} if (call) useScript(call); }
+  else if (t.id === "logPick"){ editLog[selId] = t.value; renderDetail(); }
   else if (t.id === "f-transcript") edit(selId, r => { r.callText = t.value; }, 600, "callText");
-  else if (t.id === "f-answer") edit(selId, r => { r.claudeAnswer = t.value; }, 600, "claudeAnswer");
   else if (t.id === "f-notes") edit(selId, r => { r.notes = t.value; }, 600, "notes");
   else if (t.id === "f-callback"){ edit(selId, r => { r.callback = t.value; }, 0, "callback"); renderList(); }
   else if (t.classList.contains("calc-in")){
     const l = DATA.find(x => x.id === selId), k = t.dataset.k;
-    edit(selId, r => { r.summary[k] = t.value; const n = calcNumsOf(r.summary); if (n.ok) r.summary.calc = `${ils(n.loss)} בחודש (${n.m} שיחות בשבוע × ${n.c}% סגירה × ${ils(n.d)})`; }, k === "calc_type" ? 0 : 600, "s:" + k);
+    edit(selId, r => { r.summary[k] = t.value; mine(r, k); const n = calcNumsOf(r.summary); if (n.ok) r.summary.calc = `${ils(n.loss)} בחודש (${n.m} שיחות בשבוע × ${n.c}% סגירה × ${ils(n.d)})`; }, k === "calc_type" ? 0 : 600, "s:" + k);
     if (l) refreshCalc(l, t);
   }
-  else if (t.dataset.log) edit(selId, r => { r.logDraft = {...(r.logDraft || {}), [t.dataset.log]: t.value}; }, 600, "log:" + t.dataset.log);
-  else if (t.type === "radio" && t.name.startsWith("log-")) edit(selId, r => { r.logDraft = {...(r.logDraft || {}), [t.name.slice(4)]: t.value}; }, 0, "log:" + t.name.slice(4));
-  else if (t.dataset.f) edit(selId, r => { r.summary = {...(r.summary || {}), [t.dataset.f]: t.value}; }, 600, "s:" + t.dataset.f);
-  else if (t.type === "radio" && t.name.startsWith("f-")){ edit(selId, r => { r.summary = {...(r.summary || {}), [t.name.slice(2)]: t.value}; }, 0, "s:" + t.name.slice(2)); renderStats(); }
+  else if (t.dataset.log && t.dataset.logid) editLogField(selId, t.dataset.logid, t.dataset.log, t.value, 600);
+  else if (t.type === "radio" && t.name.startsWith("log-") && t.dataset.logid) editLogField(selId, t.dataset.logid, t.name.slice(4), t.value, 0);
+  else if (t.dataset.f) edit(selId, r => { r.summary = {...(r.summary || {}), [t.dataset.f]: t.value}; mine(r, t.dataset.f); }, 600, "s:" + t.dataset.f);
+  else if (t.type === "radio" && t.name.startsWith("f-")){ edit(selId, r => { r.summary = {...(r.summary || {}), [t.name.slice(2)]: t.value}; mine(r, t.name.slice(2)); }, 0, "s:" + t.name.slice(2)); renderStats(); }
 });
 
 // ---------- live call: timer, stages, listening ----------
@@ -525,28 +571,231 @@ function liveMsg(text){ const m = $("#liveMsg"); if (!m) return; m.textContent =
 function startCall(listen){
   if (call) endCall();                        // a call left open on another lead is closed and saved first
   const now = Date.now();
-  call = {id: selId, start: now, stages: new Set(), objections: new Set(), trId: selId + "__" + now,
-    timer: setInterval(() => { const el = $("#callTime"); if (el && call) el.textContent = fmt(Date.now() - call.start); if (call && (Date.now() - call.start) > 4 * 60000) refreshChips(); }, 1000)};
-  live = {listening: false, lines: [], interim: "", lastHit: {}, rec: null};
-  renderDetail(); if (listen){ startListening(); startRecording(call); }
+  call = {id: selId, start: now, objections: new Set(), trId: selId + "__" + now, listened: false, facts: {}, objAt: {}, heard: [], cursor: 0, itUsed: 0, endAt: 0,
+    chromeText: "", timer: setInterval(tick, 250)};
+  useScript(call, true);
+  live = {listening: false, lines: [], interim: "", rec: null, lastSpeechAt: 0, byeAt: 0, toneAt: 0, srOk: false, srErr: ""};
+  if (listen) startListening();
+  renderDetail(); if (listen) startRecording(call);
 }
+// (Re)starts following the call against the chosen script, from its first line.
+function useScript(c, quiet){
+  const l = DATA.find(x => x.id === c.id); if (!l) return;
+  c.model = modelFor(l); c.done = new Set(); c.cursor = c.heard.length; c.itUsed = 0;
+  // a lead with a demo booked gets the follow-up call ("נו, דיברת עם אלה?"); everyone else starts at the opening
+  const follow = rec(c.id).status === "demo" ? c.model.steps.findIndex(s => s.flow === "follow") : -1;
+  c.view = {s: Math.max(0, follow), i: 0, pinUntil: 0, obj: null, pane: null, pick: null};
+  if (!quiet) renderCockpit();
+}
+function tick(){
+  const c = call; if (!c) return;
+  const el = $("#callTime"); if (el) el.textContent = fmt(Date.now() - c.start);
+  if (c.endAt){ if (Date.now() >= c.endAt){ endCall(); return; } renderEndBanner(); }
+  else watchEnd(c);
+}
+const stageLabels = c => [...(c.done || [])].sort((a, b) => a - b).map(i => c.model && c.model.steps[i] && c.model.steps[i].label).filter(Boolean);
 function endCall(){
   const c = call; if (!c) return; stopListening(); const chP = stopChunks(c), recP = stopRecording(c);
   if (live && live.interim){ live.lines.push({t: Date.now(), text: live.interim}); live.interim = ""; }
-  const lines = live ? live.lines : [];
+  const lines = live ? live.lines : [], srOk = !!(live && live.srOk && (lines.length || !live.srErr));
   c.end = Date.now(); clearInterval(c.timer); clearTimeout(c.trTimer); call = null; live = null;
   const keep = (lines.length > 0 || !!c.chunks) && !readOnly;
-  const entry = {at: new Date(c.end).toISOString(), dur: Math.round((c.end - c.start) / 1000), stages: [...c.stages], objections: [...c.objections], ...(keep ? {tr: c.trId} : {})};
+  const entry = {at: new Date(c.end).toISOString(), dur: Math.round((c.end - c.start) / 1000), stages: stageLabels(c), objections: [...c.objections], ...(keep ? {tr: c.trId} : {})};
   const d = keep ? trDoc(c, lines, "final") : null; if (d) trCache[c.trId] = d;
-  c.chromeText = d && lines.length ? trText(d) : "";
   edit(c.id, r => { const i = (r.calls || []).findIndex(x => x.tr && x.tr === c.trId);
-    r.calls = i >= 0 ? r.calls.map((x, j) => j === i ? entry : x) : [...(r.calls || []), entry].slice(-20);
-    if (c.chromeText) r.callText = c.chromeText; }, 0, c.chromeText ? "callText" : "");
+    r.calls = i >= 0 ? r.calls.map((x, j) => j === i ? entry : x) : [...(r.calls || []), entry].slice(-20); });
+  // The card fills itself from what was heard, but only after a listened call with a working microphone:
+  // a call without listening says nothing about whether he answered.
+  if (c.listened && srOk) autoFill(c, lines);
   c.entryAt = entry.at; recP.then(blob => { if (blob) uploadRecording(c, blob); });
   chP.then(ch => { if (ch) finishChunks(c, ch); });
-  if (keep && lines.length) saveTr(c, lines, "final").then(ok => { if (!ok) setSync("err", "התמלול לא נשמר בטבלת התמלולים. הוא שמור בכרטיס, בתיבה \"מה היה בשיחה\""); });
+  if (keep && lines.length) saveTr(c, lines, "final").then(ok => { if (ok) return;
+    const text = d ? trText(d) : ""; if (text) edit(c.id, r => { r.callText = (r.callText ? r.callText + "\n\n" : "") + text; }, 0, "callText");
+    setSync("err", "התמלול לא נשמר בטבלת התמלולים. הוא נשמר בכרטיס, ב\"עריכה\", בתיבה \"מה היה בשיחה\""); });
+  renderList();
   if (c.id !== selId) return;
-  renderDetail(); document.getElementById("fillBox")?.scrollIntoView({behavior: "smooth", block: "start"});
+  renderDetail(); document.getElementById("knownBox")?.scrollIntoView({behavior: "smooth", block: "start"});
+}
+
+// ---------- the end of a call, noticed by itself ----------
+// "ביי" (or "יום טוב", "להתראות"…) followed by a few seconds of quiet, the phone's hang-up beeps after the talk, or 45 quiet
+// seconds after the talk start a 3-second countdown on screen. Any new talk, or "השיחה ממשיכה", stops it.
+function watchEnd(c){
+  if (!live || !live.listening || (c.autoOffUntil || 0) > Date.now()) return;
+  const now = Date.now(), quiet = now - (live.lastSpeechAt || now), spoke = live.lines.length >= 2;
+  let why = "";
+  if (live.byeAt && quiet >= 3000 && now - live.byeAt >= 2500) why = "שמעתי \"ביי\" ואחריו שקט";
+  else if (spoke && live.toneAt && now - live.toneAt < 4000 && quiet >= 1500 && now - c.start > 30000) why = "שמעתי צליל של ניתוק";
+  else if (spoke && live.lastSpeechAt && quiet >= 45000) why = "שקט כבר 45 שניות";
+  if (why){ c.endAt = now + 3000; c.endWhy = why; renderEndBanner(); }
+}
+function cancelEnd(c, byHand){
+  c.endAt = 0;
+  if (byHand){ c.autoOffUntil = Date.now() + 30000; if (live){ live.byeAt = 0; live.toneAt = 0; } }
+  renderEndBanner();
+}
+function renderEndBanner(){
+  const b = $("#endBanner"); if (!b) return; const c = call;
+  if (!c || !c.endAt || c.id !== selId){ if (!b.hidden){ b.hidden = true; b.innerHTML = ""; } return; }
+  if (b.hidden || !b.querySelector("#endCount")){   // built once, so the buttons stay put while the seconds count down
+    b.hidden = false;
+    b.innerHTML = `<span><span id="endWhy"></span>. מסיים ושומר בעוד <b id="endCount"></b> שניות.</span><button type="button" class="btn sm" id="endCancel">השיחה ממשיכה</button><button type="button" class="btn sm rec" id="endNow">סיים עכשיו</button>`; }
+  b.querySelector("#endWhy").textContent = c.endWhy;
+  b.querySelector("#endCount").textContent = Math.max(1, Math.ceil((c.endAt - Date.now()) / 1000));
+}
+
+// ---------- the cockpit: following the call against the script ----------
+// When about half of a line's key words were heard, the line is done and the next one shows. The board looks a few lines
+// ahead, so a skipped line is fine. An objection the other side raises takes over the box until Paul answers it.
+// A step Paul picks by hand stays put for 25 seconds before the board moves on by itself.
+const PIN_MS = 25000, OBJ_MS = 45000;
+const lineAt = (m, p) => m.steps[p.s] && m.steps[p.s].chunks[p.i];
+// The next line. Following the call stays within the step's flow (the first call, the follow-up call); the buttons go anywhere.
+function nextPos(m, p, any){
+  const st = m.steps[p.s]; if (!st) return null; if (p.i + 1 < st.chunks.length) return {s: p.s, i: p.i + 1};
+  for (let s = p.s + 1; s < m.steps.length; s++) if (any || m.steps[s].flow === st.flow) return {s, i: 0};
+  return null;
+}
+function prevPos(m, p){ if (p.i > 0) return {s: p.s, i: p.i - 1}; return p.s > 0 ? {s: p.s - 1, i: Math.max(0, m.steps[p.s - 1].chunks.length - 1)} : null; }
+function jumpTo(c, s, i){ const v = c.view; v.s = s; v.i = i; v.obj = null; v.pick = null; v.pane = null; v.pinUntil = Date.now() + PIN_MS; c.cursor = c.heard.length; renderCockpit(); }
+function stepLine(c, dir){ const p = (dir > 0 ? nextPos : prevPos)(c.model, c.view, true); if (p) jumpTo(c, p.s, p.i); }
+// Key words heard since the last matched line: the final text, plus the part of the words still being spoken not used yet.
+function follow(c, fin, interim){
+  const m = c.model, v = c.view; if (!m || !m.steps.length) return false;
+  if (fin){ const ft = Engine.keyToks(fin), before = c.heard.length; c.heard.push(...ft);
+    if (c.itUsed){ c.cursor = Math.max(c.cursor, before + Math.min(c.itUsed, ft.length)); c.itUsed = 0; } }
+  const it = interim ? Engine.keyToks(interim) : []; if (c.itUsed > it.length) c.itUsed = 0;
+  const heard = new Set([...c.heard.slice(c.cursor), ...it.slice(c.itUsed)].slice(-60));
+  const consume = () => { c.cursor = c.heard.length; c.itUsed = it.length; };
+  if (v.obj && v.obj.o.kt.length && Engine.said(v.obj.o, heard)){ v.obj = null; v.pick = null; consume(); return true; }
+  const pinned = Date.now() < v.pinUntil;
+  for (let p = {s: v.s, i: v.i}, k = 0; p && k < (pinned ? 1 : 8); p = nextPos(m, p), k++){
+    if (!Engine.said(lineAt(m, p), heard)) continue;
+    c.done.add(p.s); consume();
+    const n = nextPos(m, p) || p;   // the flow's last line stays on screen
+    v.s = n.s; v.i = n.i;
+    return true;
+  }
+  return false;
+}
+function hearObjection(c, text){
+  if (!text || Engine.isPaul(text, c.model)) return false;
+  const hit = Engine.findObjection(text, c.model); if (!hit) return false;
+  const now = Date.now(), t = hit.o.title; if (now - (c.objAt[t] || 0) < 25000) return false;
+  c.objAt[t] = now; c.objections.add(t); c.view.obj = {o: hit.o, kw: hit.kw, at: now}; c.view.pick = null; return true;
+}
+// Every result from Chrome's recognition: what was finally heard (fin) and what is still being said (interim).
+function heardSpeech(fin, interim){
+  const c = call; if (!c || !live) return;
+  const now = Date.now(), text = `${fin} ${interim}`.trim(); if (!text) return;
+  live.srOk = true; live.lastSpeechAt = now;
+  if (Engine.isBye(text)) live.byeAt = now;
+  else if (text.split(" ").length >= 2){ if (fin) live.byeAt = 0; if (c.endAt) cancelEnd(c); }
+  hearObjection(c, fin); hearObjection(c, interim);
+  follow(c, fin, interim);
+  if (fin) c.facts = Engine.facts(live.lines.map(x => x.text).join(" . "));
+  renderCockpit();
+}
+function renderCockpit(){
+  const c = call, box = $("#sayBox"); if (!c || !box || c.id !== selId || !c.model) return;
+  const l = DATA.find(x => x.id === c.id), m = c.model, v = c.view;
+  if (v.obj && !v.pick && Date.now() - v.obj.at > OBJ_MS) v.obj = null;
+  // what to say now: built once, then only its text changes, so its buttons stay under the mouse
+  if (!box.querySelector("#sayNow")) box.innerHTML = `<div class="say-h"><span id="sayTag"></span><span class="saynav"><button type="button" class="btn sm" id="objClose" hidden>חזרה לתסריט</button><button type="button" class="btn sm" data-say="-1" aria-label="המשפט הקודם">→ הקודם</button><button type="button" class="btn sm" data-say="1" aria-label="המשפט הבא">הבא ←</button></span></div><div class="say-now" id="sayNow"></div><div class="say-next" id="sayNext"></div>`;
+  const tag = box.querySelector("#sayTag"), now = box.querySelector("#sayNow"), next = box.querySelector("#sayNext");
+  box.classList.toggle("obj", !!v.obj); box.querySelector("#objClose").hidden = !v.obj;
+  if (v.obj){ const o = v.obj.o;
+    tag.textContent = `התנגדות: ${o.title}${v.obj.kw ? ` · שמעתי "${v.obj.kw}"` : ""}`;
+    now.textContent = fillIn(o.say || "התשובה המלאה למטה, בהתנגדויות", l); next.textContent = o.then ? "ואז: " + fillIn(o.then, l) : ""; }
+  else { const ch = lineAt(m, v), n = nextPos(m, v), nch = n && lineAt(m, n), st = m.steps[v.s];
+    tag.textContent = st ? `מה להגיד עכשיו · ${st.label}` : "בתסריט הזה אין שורות להגיד";
+    now.textContent = ch ? fillIn(ch.text, l) : "";
+    next.textContent = nch ? `אחר כך${n.s !== v.s ? ` (${m.steps[n.s].label})` : ""}: ${fillIn(nch.text, l)}` : ""; }
+  // the numbers heard so far, and what they mean in money
+  const hf = $("#heardFacts"), f = c.facts || {};
+  if (hf){ const bits = [f.missed && `${f.missed} שיחות בשבוע`, f.deal && `עבודה ${ils(f.deal)}`, f.close && `${f.close}% סגירה`].filter(Boolean);
+    const loss = f.missed && f.deal && f.close ? f.missed * WEEKS * (f.close / 100) * f.deal : 0;
+    const one = f.deal ? (kindOf(l) === "B" ? `אם רק אחת בשבוע הולכת למתחרה: ${ils(f.deal * 4)} בחודש` : `עסקה אחת שהולכת למתחרה: ${ils(f.deal)}`) : "";
+    hf.hidden = !bits.length; hf.textContent = bits.length ? `שמעתי: ${bits.join(" · ")}${loss ? ` → כ-${ils(loss)} בחודש` : one ? ` → ${one}` : ""}` : ""; }
+  // the script's steps, to jump to any of them, and the helpers
+  const nav = $("#stepNav");
+  if (nav){ const sig = [v.s, v.obj ? "o" : "", v.pane || "", [...c.done].join(","), m.steps.length].join("|");
+    if (nav.dataset.sig !== sig){ nav.dataset.sig = sig;
+      nav.innerHTML = m.steps.map((s, i) => `${s.group && s.group !== (m.steps[i - 1] || {}).group ? `<span class="grp">${esc(s.group)}</span>` : ""}<button type="button" class="stepchip ${i === v.s && !v.obj && !v.pane ? "cur" : ""} ${c.done.has(i) ? "done" : ""}" data-step="${i}">${c.done.has(i) ? "✓ " : ""}${esc(s.label)}</button>`).join("")
+        + `<span class="grp">עזרה</span>` + [["obj", "התנגדויות"], ["calc", "מחשבון"], ...(briefHtml(l) ? [["brief", "תדריך"]] : [])].map(([k, n]) => `<button type="button" class="stepchip side ${v.pane === k ? "cur" : ""}" data-pane="${k}">${n}</button>`).join(""); } }
+  // the text of the step (or the helper) open now; rebuilt only when it changes, so it keeps its scroll
+  const pane = $("#stepPane");
+  if (pane){ const key = v.pane ? v.pane + ":" + (v.pick ?? "") : "s" + v.s + ":" + scriptPick(l);
+    if (pane.dataset.key !== key){ pane.dataset.key = key;
+      pane.innerHTML = v.pane === "obj" ? objPaneHtml(c, l) : v.pane === "calc" ? calcHtml(l) : v.pane === "brief" ? briefHtml(l)
+        : m.steps[v.s] ? `<div class="md">${mdToHtml(fillIn(m.steps[v.s].md, l))}</div>` : ""; } }
+}
+function objPaneHtml(c, l){
+  const m = c.model, o = m.objections.find(x => x.id === c.view.pick);
+  return `<div class="objpick">${m.objections.map(x => `<button type="button" class="btn sm ${o && o.id === x.id ? "on" : ""}" data-objpick="${x.id}">${esc(x.title)}</button>`).join("")}</div>`
+    + (o ? `<div class="md">${mdToHtml(fillIn(o.md, l))}</div>` : `<div class="note">בוחרים התנגדות, והתשובה שלה עולה ל"מה להגיד".</div>`);
+}
+
+// ---------- the automatic fill after a call ----------
+// Engine.extract reads the transcript (numbers, times, objections, quotes, the status). Here its answer goes into the card:
+// a field Paul wrote himself is never overwritten, the status never moves backwards, and the call gets its post-call log.
+// Everything filled is marked ✦, and "בטל את המילוי" puts the card back as it was.
+function autoFill(c, lines){
+  const l = DATA.find(x => x.id === c.id); if (!l) return;
+  const res = Engine.extract({lines: lines.map(x => ({s: Math.max(0, Math.round((x.t - c.start) / 1000)), x: x.text})), model: c.model, kind: kindOf(l),
+    objections: [...c.objections], dur: Math.round((c.end - c.start) / 1000), now: new Date(c.end), prevLogs: (rec(c.id).logs || []).length});
+  c.logId = applyAuto(l, res, {source: "call", trId: lines.length ? c.trId : ""});
+}
+function applyAuto(l, res, meta){
+  const at = new Date().toISOString(), logId = meta.source === "call" ? Date.now().toString(36) : "";
+  edit(l.id, r => {
+    const sm = r.summary = r.summary || {}, autoK = new Set(r.autoKeys || []), keys = [];
+    const prev = {status: r.status || "new", callback: r.callback || "", attempts: r.attempts || 0, summary: {}};
+    const put = (k, v) => { const cur = String(sm[k] ?? "").trim(); if ((cur && !autoK.has(k)) || cur === v) return; prev.summary[k] = sm[k] ?? null; sm[k] = v; autoK.add(k); keys.push(k); };
+    for (const [k, v] of Object.entries({...res.summary, ...res.calc})) put(k, v);
+    const n = calcNumsOf(sm); if (n.ok) put("calc", `${ils(n.loss)} בחודש (${n.m} שיחות בשבוע × ${n.c}% סגירה × ${ils(n.d)})`);
+    let st = res.status || "", to = "";
+    if (meta.source !== "call" && (st === "noanswer" || st === "voicemail")) st = "";   // a typed note or an old transcript says nothing about answering
+    if (meta.source === "call" && (st === "noanswer" || st === "voicemail")) r.attempts = (r.attempts || 0) + 1;
+    const cur = r.status || "new";
+    if (st && st !== cur){
+      const ok = st === "noanswer" || st === "voicemail" ? RANK[cur] <= 1 : st === "dnc" || st === "notrelevant" ? !["won", "dnc"].includes(cur)
+        : st === "callback" ? RANK[cur] <= 3 : st === "done" ? RANK[cur] <= 2 : st === "demo" ? RANK[cur] < 5 : RANK[st] > RANK[cur];
+      if (ok){ r.status = st; r.history = [...(r.history || []), {t: at, s: st, auto: true}]; to = st; }
+    }
+    if (res.callback && (to === "demo" || to === "callback" || st === r.status)) r.callback = res.callback;
+    if (logId){
+      if (draftLeft(r)){ r.logs = [...(r.logs || []), {id: logId + "d", at, by: user.email, status: prev.status, ...Object.fromEntries(Object.entries(r.logDraft).filter(([, v]) => String(v ?? "").trim()))}]; r.logDraft = {}; }
+      r.logs = [...(r.logs || []), {id: logId, at, by: user.email, status: r.status, auto: true, ...res.log, ...(meta.trId ? {tr: meta.trId} : {})}].slice(-60);
+    }
+    r.autoKeys = [...autoK].slice(-60);
+    r.lastAuto = {at, source: meta.source, status: to, callback: to === "demo" || to === "callback" ? r.callback : "", keys, logId, prev};
+  }, 0, "auto");
+  return logId;
+}
+function undoAuto(id){
+  edit(id, r => { const a = r.lastAuto; if (!a) return; const sm = r.summary || {}, autoK = new Set(r.autoKeys || []);
+    for (const [k, v] of Object.entries(a.prev.summary || {})){ if (!autoK.has(k)) continue; if (v == null) delete sm[k]; else sm[k] = v; autoK.delete(k); }
+    if (a.status && r.status === a.status){ r.status = a.prev.status; r.history = [...(r.history || []), {t: new Date().toISOString(), s: r.status, undo: true}]; }
+    r.callback = a.prev.callback; r.attempts = a.prev.attempts;
+    if (a.logId) r.logs = (r.logs || []).filter(x => x.id !== a.logId);
+    r.autoKeys = [...autoK]; r.lastAuto = null; }, 0, "auto");
+  renderList(); renderDetail();
+}
+// The same fill from an earlier call's transcript, or from what Paul typed after a call without listening.
+function fillFromTranscript(id, trId){
+  const l = DATA.find(x => x.id === id), d = trCache[trId]; if (!l || !d) return;
+  const lines = ((d.audio || []).length ? d.audio : d.lines || []).map(x => ({s: x.s || 0, x: x.x}));
+  const end = new Date(new Date(d.at || Date.now()).getTime() + (d.dur || 0) * 1000);
+  applyAuto(l, Engine.extract({lines, model: modelFor(l), kind: kindOf(l), objections: d.objections || [], dur: d.dur || 0, now: end, prevLogs: (rec(id).logs || []).length}), {source: "transcript", trId});
+  renderList(); renderDetail(); document.getElementById("knownBox")?.scrollIntoView({behavior: "smooth", block: "start"});
+}
+function fillFromText(id){
+  const l = DATA.find(x => x.id === id), text = ($("#f-transcript")?.value || "").trim(); if (!l) return;
+  if (text.length < 10){ $("#fillMsg").textContent = "כתוב קודם מה היה בשיחה."; return; }
+  const lines = text.split(/\n+/).filter(x => !/^(שיחה עם|תאריך|שלבים שזוהו|התנגדויות שעלו|תמלול)/.test(x)).map(x => x.replace(/^\[\d+:\d+\]\s*/, "").trim()).filter(Boolean).map((x, i) => ({s: i * 10, x}));
+  applyAuto(l, Engine.extract({lines, model: modelFor(l), kind: kindOf(l), dur: lines.length * 10, now: new Date(), prevLogs: (rec(id).logs || []).length}), {source: "transcript"});
+  renderList(); renderDetail();
 }
 addEventListener("pagehide", () => stopListening());   // never leave the microphone listening behind a closed page
 
@@ -571,16 +820,34 @@ async function startRecording(c){
   const chunks = []; mr.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
   mr.start(1000);
   c.recording = {mr, stream, chunks, mime: mr.mimeType || mime || "audio/webm"}; c.recState = "on"; renderRecBadge();
-  startChunks(c);
+  startMeter(c, stream); startChunks(c);
 }
 function stopRecording(c){
-  const r = c && c.recording; if (!r) return Promise.resolve(null);
+  stopMeter(c); const r = c && c.recording; if (!r) return Promise.resolve(null);
   c.recording = null;
   return new Promise(res => {
     const done = () => { r.stream.getTracks().forEach(t => t.stop()); res(r.chunks.length ? new Blob(r.chunks, {type: r.mime}) : null); };
     if (r.mr.state === "inactive") done(); else { r.mr.onstop = done; try { r.mr.stop(); } catch { done(); } }
   });
 }
+// A short pure tone after the talk (the phone's hang-up beeps) is one more sign that the call is over.
+function startMeter(c, stream){
+  try {
+    const ac = new AudioContext(), an = ac.createAnalyser(); an.fftSize = 2048; an.smoothingTimeConstant = 0;
+    ac.createMediaStreamSource(stream).connect(an); ac.resume().catch(() => {});
+    const fb = new Float32Array(an.frequencyBinCount), hz = ac.sampleRate / an.fftSize, lo = Math.floor(300 / hz), hi = Math.ceil(2500 / hz);
+    let run = 0;
+    c.meter = {ac, timer: setInterval(() => {
+      if (!live || ac.state !== "running") return; an.getFloatFrequencyData(fb);
+      let tot = 0, mx = -Infinity, mi = lo;
+      for (let i = lo; i <= hi; i++){ tot += 10 ** (fb[i] / 10); if (fb[i] > mx){ mx = fb[i]; mi = i; } }
+      const peak = 10 ** (fb[mi] / 10) + 10 ** (fb[mi - 1] / 10) + 10 ** (fb[mi + 1] / 10);
+      run = mx > -60 && tot > 0 && peak / tot > 0.6 ? run + 1 : 0;   // most of the sound in one narrow band, for 200 ms
+      if (run >= 4) live.toneAt = Date.now();
+    }, 50)};
+  } catch {}
+}
+function stopMeter(c){ const m = c && c.meter; if (!m) return; clearInterval(m.timer); try { m.ac.close(); } catch {} c.meter = null; }
 function downloadBlob(blob, name){
   const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click();
   setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 2000);
@@ -599,7 +866,9 @@ async function uploadRecording(c, blob){
     (chains.get(c.id) || Promise.resolve()).then(() => setSync("err", "ההקלטה לא נשמרה בשרת, ולכן הורדה למחשב"));
     if (c.id === selId && !summaryOpen) renderDetail(); return;
   }
-  edit(c.id, r => { r.calls = (r.calls || []).map(x => x.at === c.entryAt ? {...x, audio} : x); r.logDraft = {...(r.logDraft || {}), audio: path}; }, 0, "audio");
+  edit(c.id, r => { r.calls = (r.calls || []).map(x => x.at === c.entryAt ? {...x, audio} : x);
+    if (c.logId && (r.logs || []).some(x => x.id === c.logId)) r.logs = r.logs.map(x => x.id === c.logId ? {...x, audio: path} : x);
+    else r.logDraft = {...(r.logDraft || {}), audio: path}; }, 0, "audio");
   if (c.id === selId && !summaryOpen) renderDetail();
 }
 // A recording's accurate transcript: "atr" points to its row in "transcripts". A call whose transcript was made live
@@ -619,7 +888,7 @@ async function signedUrl(path, download){
 function trDoc(c, lines, status){
   const l = DATA.find(x => x.id === c.id) || {};
   const d = {lead: c.id, name: l.name || "", niche: l.niche || "", at: new Date(c.start).toISOString(), dur: Math.round(((c.end || Date.now()) - c.start) / 1000), status,
-    stages: STAGES[trackKind(l)].map(([n]) => n).filter(n => c.stages.has(n)), objections: [...c.objections],
+    stages: stageLabels(c), objections: [...c.objections],
     lines: lines.map(x => ({s: Math.round((x.t - c.start) / 1000), x: x.text})), ...chunkDoc(c)};
   while (d.lines.length > 1 && JSON.stringify(d).length > 400000){ d.lines.shift(); d.trimmed = true; }
   return d;
@@ -667,34 +936,21 @@ $("#detail").addEventListener("toggle", async e => {
 }, true);
 function startListening(){
   if (!SR){ liveMsg("הדפדפן הזה לא תומך בתמלול. פתח את האתר ב-Google Chrome."); return; }
-  if (!live) return; live.listening = true;
+  if (!live) return; live.listening = true; if (call) call.listened = true;
   const r = new SR(); r.lang = "he-IL"; r.continuous = true; r.interimResults = true; r.maxAlternatives = 1; live.rec = r;
-  r.onresult = ev => { if (!live) return; live.interim = "";
+  r.onaudiostart = () => { if (live) live.srOk = true; };
+  r.onresult = ev => { if (!live) return; live.interim = ""; let fin = "";
     for (let i = ev.resultIndex; i < ev.results.length; i++){ const res = ev.results[i], txt = res[0].transcript.trim(); if (!txt) continue;
-      if (res.isFinal){ live.lines.push({t: Date.now(), text: txt}); detect(txt); queueTrSave(); } else live.interim += (live.interim ? " " : "") + txt; }
-    if (live.interim) detect(live.interim); renderTranscript(); };
-  r.onerror = ev => {
+      if (res.isFinal){ live.lines.push({t: Date.now(), text: txt}); fin += (fin ? " " : "") + txt; queueTrSave(); } else live.interim += (live.interim ? " " : "") + txt; }
+    heardSpeech(fin, live.interim); renderTranscript(); };
+  r.onerror = ev => { if (live) live.srErr = ev.error;
     if (ev.error === "not-allowed" || ev.error === "service-not-allowed"){ liveMsg("Chrome לא קיבל גישה למיקרופון. לחץ על סמל המנעול ליד הכתובת ואשר מיקרופון."); stopListening(); renderDetail(); }
     else if (ev.error === "audio-capture"){ liveMsg("לא נמצא מיקרופון."); stopListening(); renderDetail(); }
     else if (ev.error === "network") liveMsg("אין חיבור לשירות התמלול. מנסה שוב…"); };
-  r.onend = () => { if (live && live.listening) setTimeout(() => { try { r.start(); } catch {} }, 250); };
+  r.onend = () => { if (call) call.itUsed = 0; if (live && live.listening) setTimeout(() => { try { r.start(); } catch {} }, 250); };
   try { r.start(); } catch {}
 }
 function stopListening(){ if (!live) return; live.listening = false; try { live.rec && live.rec.stop(); } catch {} }
-function detect(text){
-  const l = call && DATA.find(x => x.id === call.id); if (!l) return; const t = norm(text);
-  for (const [n, kws] of STAGES[trackKind(l)]) if (!call.stages.has(n) && kws.some(k => has(t, k))){ call.stages.add(n); refreshChips(); }
-  const blocks = objBlocks(l);
-  for (const [kws, frags] of OBJ){ const kw = kws.find(k => has(t, k)); if (!kw) continue;
-    const o = blocks.find(b => frags.some(f => b.title.includes(f))); if (!o) continue;
-    if (live.lastHit[o.title] && Date.now() - live.lastHit[o.title] < 25000) continue;
-    live.lastHit[o.title] = Date.now(); call.objections.add(o.title); live.current = {o, kw}; renderLiveObj(); break; }
-}
-function renderLiveObj(){ const box = $("#liveObj"); if (!box) return; const c = live && live.current; if (!c || !call){ box.innerHTML = ""; return; }
-  box.innerHTML = `<div class="objlive"><div class="t"><span>${esc(c.o.title)}</span><button type="button" class="btn sm" id="objClose" aria-label="סגור">✕</button></div><div class="heard">שמעתי: "${esc(c.kw)}"</div><div class="md">${mdToHtml(c.o.body)}</div></div>`; }
-function refreshChips(){ const l = DATA.find(x => x.id === selId); const box = $("#stageChips"); if (!l || !box || !call) return;
-  const kind = trackKind(l), late = (Date.now() - call.start) > 4 * 60000;
-  box.querySelectorAll(".stagechip").forEach(b => { const n = b.dataset.stage, d = call.stages.has(n); b.classList.toggle("done", d); b.classList.toggle("miss", !d && late && MUST[kind].includes(n)); b.textContent = (d ? "✓ " : "") + n; }); }
 function renderTranscript(){ const box = $("#liveTranscript"); if (!box || !live) return;
   box.innerHTML = live.lines.slice(-40).map(x => `<div><span class="ts">${fmt(x.t - (call ? call.start : x.t))}</span>${esc(x.text)}</div>`).join("") + (live.interim ? `<div class="interim">${esc(live.interim)}</div>` : "");
   box.scrollTop = box.scrollHeight; }
@@ -823,58 +1079,6 @@ async function transcribeRecording(id, btn){
   delete trCache[res.id];
   edit(id, r => { r.calls = (r.calls || []).map(x => x.audio && x.audio.path === path ? {...x, audio: {...x.audio, atr: res.id}} : x); });
   if (id === selId && !summaryOpen) renderDetail();
-}
-
-// ---------- summary with Claude (copy / paste) ----------
-const KIND_LABEL = l => l.track === "ראשית" ? "שיחת היכרות (לא מוכרים לפני שעלה כאב, היעד: דמו ביום ושעה)" : "שיחת מכירה (היעד: 4 פרטים לדמו, ובשיחת המשך: סגירה)";
-function localNow(){ const d = new Date(), z = n => String(n).padStart(2, "0"); return `${d.getFullYear()}-${z(d.getMonth() + 1)}-${z(d.getDate())}T${z(d.getHours())}:${z(d.getMinutes())}`; }
-async function copyPrompt(){
-  const l = DATA.find(x => x.id === selId); const tr = ($("#f-transcript")?.value || "").trim(); if (!l) return;
-  if (tr.length < 40){ $("#fillMsg").textContent = "אין עדיין תמלול. הקשב לשיחה, או הדבק תמלול."; return; }
-  const fields = FORM.filter(f => f[0] !== "price" && f[0] !== "feedback").map(([k, label, , opts]) => `- ${k}: ${label}${opts ? " (בחר בדיוק אחת מ: " + opts.join(" | ") + ")" : ""}`).join("\n");
-  const prompt = `אתה ממלא טופס סיכום של שיחת מכירה טלפונית בעברית, מתוך תמלול.
-התמלול הוא ערוץ אחד בלי הפרדה בין הדוברים: איש המכירות ובעל העסק. ייתכנו שגיאות זיהוי דיבור.
-השתמש רק במה שנאמר בתמלול. אל תנחש ואל תמציא. שדה שלא עלה בשיחה, אל תכלול בכלל.
-הליד: ${l.name} · תחום: ${l.niche} · אזור: ${l.area || "לא ידוע"} · סוג השיחה: ${KIND_LABEL(l)}
-התאריך והשעה עכשיו: ${localNow()}
-
-השדות:
-${fields}
-
-סטטוסים אפשריים: noanswer, voicemail (השאיר הודעה בתא הקולי), callback (ואז callback = המועד), booked, done, demo (ואז callback = מועד הדמו), won, notrelevant, dnc.
-
-החזר רק JSON בצורה הזו, בלי טקסט נוסף:
-{"summary": {"<key>": "<ערך קצר בעברית>"}, "status": "<אחד מהסטטוסים>", "callback": "YYYY-MM-DDTHH:MM או מחרוזת ריקה", "notes": "2–4 שורות קצרות: מה חשוב לזכור לשיחה הבאה"}
-
-התמלול:
-"""
-${tr.slice(-40000)}
-"""`;
-  try { await navigator.clipboard.writeText(prompt); $("#fillMsg").textContent = "הועתק. הדבק בצ'אט של Claude, והחזר לכאן את התשובה."; }
-  catch { $("#fillMsg").textContent = "ההעתקה לא עבדה. סמן את התמלול והעתק ידנית."; }
-}
-function parseAnswer(){
-  const raw = ($("#f-answer")?.value || "").trim(); const a = raw.indexOf("{"), b = raw.lastIndexOf("}");
-  let res = null; try { res = JSON.parse(raw.slice(a, b + 1)); } catch {}
-  if (!res){ $("#fillPreview").innerHTML = `<div class="msg">לא הצלחתי לקרוא את התשובה. ודא שהעתקת את כל ה-JSON.</div>`; return; }
-  const sm = {}, valid = new Set(FORM.map(f => f[0]));
-  for (const [k, v] of Object.entries(res.summary || {})){ if (!valid.has(k) || v == null || String(v).trim() === "") continue;
-    const f = FORM.find(x => x[0] === k); if (f[2] === "radio" && !f[3].includes(String(v))) continue; sm[k] = String(v).slice(0, 600); }
-  const st = STATUSES.some(([k]) => k === res.status) ? res.status : "";
-  const cb = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(res.callback || "") ? res.callback : "";
-  const notes = String(res.notes || "").slice(0, 800);
-  pendingFill = {summary: sm, status: st, callback: cb, notes};
-  const rows = Object.entries(sm).map(([k, v]) => kv(FORM.find(f => f[0] === k)[1], v)).join("");
-  $("#fillPreview").innerHTML = `<div class="facts">${st ? kv("סטטוס מוצע", SLABEL[st]) : ""}${cb ? kv("מועד", fmtDT(cb)) : ""}${notes ? kv("הערות לשיחה הבאה", notes) : ""}${rows}</div>
-    <div class="inline" style="margin-top:8px"><button type="button" class="btn sm primary" id="fillApply">החל על הטופס</button><button type="button" class="btn sm" id="fillCancel">בטל</button></div>`;
-}
-function applyFill(){
-  if (!pendingFill || !selId) return; const f = pendingFill;
-  edit(selId, r => { r.summary = {...(r.summary || {}), ...f.summary};
-    if (f.status && f.status !== r.status){ if (f.status === "noanswer" || f.status === "voicemail") r.attempts = (r.attempts || 0) + 1; r.status = f.status; r.history.push({t: new Date().toISOString(), s: f.status}); }
-    if (f.callback) r.callback = f.callback;
-    if (f.notes) r.notes = (r.notes ? r.notes + "\n" : "") + `[${new Date().toLocaleDateString("he-IL")}] ${f.notes}`; });
-  pendingFill = null; renderList(); renderDetail();
 }
 
 // ---------- export / admin import ----------

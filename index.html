@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Hebrew:wght@400;500;600;700&family=Suez+One&family=IBM+Plex+Mono:wght@500;600&display=swap">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/dist/umd/supabase.js" integrity="sha384-BWcjm9OdFth9TbhCxZPdm+gAOUMAzQy9nmTs12ioXdCcbVnJaPMn+fMUoQCLt60R" crossorigin="anonymous"></script>
-<script src="config.js?v=2026-10-27o"></script>
+<script src="config.js?v=2026-10-27p"></script>
 <style>
 /* Layout: a two-pane call sheet. The call queue sits on the start side, the open lead's call card beside it; the live call panel sits at the top of the card. One column on phones. */
 :root{
@@ -40,7 +40,7 @@ a{color:var(--info-ink)}
 button,input,select,textarea{font:inherit;color:inherit}
 :focus-visible{outline:2px solid var(--focus);outline-offset:2px}
 .app{padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:env(safe-area-inset-top,0px) 24px;max-width:1440px;margin:0 auto}
-.hidden{display:none!important}
+.hidden,[hidden]{display:none!important}
 .btn{border:1px solid var(--line);background:var(--panel);border-radius:8px;padding:6px 11px;cursor:pointer}
 .btn:hover{border-color:var(--muted)}
 .btn.sm{padding:3px 9px;font-size:13px}
@@ -117,13 +117,46 @@ header.top{padding-block:12px 10px;display:grid;gap:10px;border-bottom:1px solid
 .mic.on .dot{background:var(--rec);animation:pulse 1.2s infinite}
 @keyframes pulse{50%{opacity:.35}}
 @media (prefers-reduced-motion:reduce){.mic.on .dot{animation:none}}
-.stages{display:flex;flex-wrap:wrap;gap:6px}
-.stagechip{font-size:12.5px;border:1px solid var(--line);border-radius:999px;padding:2px 10px;background:var(--sunk);cursor:pointer}
-.stagechip.done{background:var(--ok-bg);color:var(--ok-ink);border-color:transparent}
-.stagechip.miss{background:var(--warn-bg);color:var(--warn-ink);border-color:transparent;font-weight:600}
-.objlive{border:2px solid var(--tape);border-radius:12px;padding:10px 12px}
-.objlive .t{display:flex;justify-content:space-between;gap:8px;align-items:center;font:400 19px/1.3 var(--f-display)}
-.objlive .heard{font-size:12.5px;color:var(--muted)}
+/* the cockpit: what to say now, the script steps, the open step */
+.btn.big{font-size:17px;padding:10px 20px;border-radius:10px}
+.linkbtn{background:none;border:0;padding:2px 4px;color:var(--info-ink);text-decoration:underline;cursor:pointer;font-size:13.5px}
+.callhead select{font-size:13px;padding:3px 6px;margin-inline-start:auto}
+.say{border:2px solid var(--call);border-radius:12px;padding:10px 14px;display:grid;gap:6px;background:var(--panel)}
+.say.obj{border-color:var(--tape);background:var(--warn-bg)}
+.say-h{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;font-size:12.5px;font-weight:600;color:var(--muted)}
+.say.obj .say-h{color:var(--warn-ink)}
+.saynav{display:flex;gap:6px}
+.say-now{font:400 22px/1.4 var(--f-display);text-wrap:pretty}
+.say-next{font-size:13.5px;color:var(--muted)}
+.say-next:empty{display:none}
+.heardfacts{font-size:13.5px;font-weight:600;padding:6px 10px;border-radius:8px;background:var(--info-bg);color:var(--info-ink)}
+.steps{display:flex;flex-wrap:wrap;gap:5px;align-items:center}
+.steps .grp{font-size:11px;color:var(--muted);margin-inline:6px 2px}
+.stepchip{font-size:13px;border:1px solid var(--line);border-radius:999px;padding:2px 11px;background:var(--sunk);cursor:pointer;color:var(--ink)}
+.stepchip.done{background:var(--ok-bg);color:var(--ok-ink);border-color:transparent}
+.stepchip.cur{background:var(--ink);color:var(--panel);border-color:var(--ink);font-weight:600}
+.stepchip.side{border-style:dashed}
+.steppane{max-height:38vh;overflow:auto;background:var(--sunk);border-radius:10px;padding:4px 12px 10px}
+.steppane:empty{display:none}
+.objpick{display:flex;flex-wrap:wrap;gap:6px;padding-top:8px}
+.objpick .btn.on{background:var(--tape);color:var(--tape-ink);border-color:transparent}
+.endbanner{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:8px 12px;border-radius:10px;background:var(--warn-bg);color:var(--warn-ink);font-weight:600}
+.transcript.mini{max-height:5.4em;font-size:13px;color:var(--muted)}
+.transcript.mini:empty{display:none}
+/* after the call: what the board filled by itself */
+.donecard{display:grid;gap:4px;padding:10px 12px;border-radius:10px;background:var(--ok-bg);color:var(--ok-ink)}
+.donecard .note{color:inherit;opacity:.85}
+.known .knownhead{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.statusrow{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.kv.auto{border-color:var(--call)}
+.autotag{font-size:10.5px;font-weight:600;color:var(--call);white-space:nowrap}
+.notesview{background:var(--sunk);border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:14px;white-space:pre-wrap}
+.notesview .k{font-size:11.5px;color:var(--muted)}
+.editarea{display:grid;gap:10px;padding-top:6px}
+.editarea h4{margin:8px 0 0;font-size:14px}
+details.more{margin-top:14px;border:1px solid var(--line);border-radius:10px;padding:8px 12px}
+details.more summary{cursor:pointer;font-weight:600}
+.morein{display:grid;gap:10px;padding-top:8px}
 .transcript{max-height:180px;overflow:auto;font-size:14px;display:flex;flex-direction:column;gap:3px;background:var(--sunk);border-radius:8px;padding:8px 10px}
 .transcript .ts{font:500 11px var(--f-num);color:var(--muted);margin-inline-end:6px}
 .transcript .interim{color:var(--muted);font-style:italic}
@@ -174,14 +207,6 @@ header.top{padding-block:12px 10px;display:grid;gap:10px;border-bottom:1px solid
 .bk.obj{padding:8px 10px;border-radius:6px;background:var(--info-bg);color:var(--info-ink)}
 .bk.obj .k{color:inherit;opacity:.8}
 .watch{font-size:13.5px;padding:7px 10px;border-radius:6px;background:var(--warn-bg);color:var(--warn-ink)}
-.objs{margin-top:12px;border:1px solid var(--line);border-radius:12px;padding:10px 12px;display:flex;flex-wrap:wrap;gap:6px;align-items:flex-start}
-.objs-h{width:100%;font-size:13px;font-weight:600}
-.obj-d{border:1px solid var(--line);border-radius:999px;background:var(--sunk)}
-.obj-d[open]{flex-basis:100%;border-radius:10px;background:var(--panel)}
-.obj-d summary{cursor:pointer;padding:3px 12px;font-size:13.5px;list-style:none}
-.obj-d summary::-webkit-details-marker{display:none}
-.obj-d[open] summary{font-weight:600;border-bottom:1px solid var(--line)}
-.obj-d .md{padding:6px 12px 10px}
 .fit{margin-top:12px;padding:10px 12px;border-radius:8px;background:var(--ok-bg);color:var(--ok-ink)}
 .facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:8px;margin-top:12px}
 .kv{background:var(--sunk);border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:14px;overflow-wrap:anywhere}
@@ -266,11 +291,12 @@ details.script summary{cursor:pointer;font-weight:600}
     </header>
     <div class="layout">
       <div id="list" role="list"></div>
-      <div id="detail"><div class="empty"><b>בחר עסק מהרשימה</b>יופיעו כאן התדריך, הטלפון, הקשבה לשיחה, הסטטוס וטופס הסיכום. כל סימון נשמר מיד ומופיע אצל כל הצוות.</div></div>
+      <div id="detail"><div class="empty"><b>בחר עסק מהרשימה</b>יופיעו כאן הטלפון, התדריך וכפתור השיחה. בסוף כל שיחה הכרטיס מתמלא לבד, ונשמר אצל כל הצוות.</div></div>
     </div>
   </section>
 </div>
 
-<script src="app.js?v=2026-10-27o"></script>
+<script src="engine.js?v=2026-10-27p"></script>
+<script src="app.js?v=2026-10-27p"></script>
 </body>
 </html>
