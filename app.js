@@ -12,14 +12,15 @@ const sb = window.supabase.createClient(CFG.url, CFG.key, {auth: {persistSession
 const STATUSES = [["new","לא התקשרתי"],["noanswer","לא ענה"],["voicemail","השארתי הודעה"],["callback","לחזור אליו"],["booked","נקבעה שיחה"],["done","שיחת היכרות בוצעה"],["demo","נקבע דמו"],["won","סגר"],["notrelevant","לא רלוונטי"],["dnc","ביקש לא להתקשר"]];
 const SLABEL = Object.fromEntries(STATUSES);
 // Every price we quote is before VAT (Israeli VAT, 18% since 2025). Prices follow cold-call-short-v3:
-// type B = repairs and service calls (D-028), type A = projects (D-034).
+// type B = repairs and service calls (D-028), type A = projects (D-034). Since 27.10 garages, barbers and taxis are type B
+// too; car lots, real estate and moving companies stay type A.
 const VAT = 0.18;
 const ils = n => "₪" + Math.round(n).toLocaleString("he-IL");
 const withVat = n => `${ils(n)} פלוס מע"מ (${ils(n * (1 + VAT))} כולל מע"מ)`;
 const PRICES = {
   B: {monthly: 790, pilot: 490, text: `סוג ב׳ (D-028): ₪2,490 הקמה ו-₪790 לחודש, פלוס מע"מ. פיילוט ל-5 הראשונים: ₪1,490 הקמה ו-₪490 לחודש, פלוס מע"מ, בתמורה להמלצה מוקלטת.`},
   A: {monthly: 1490, setup: 2990, text: `סוג א׳ (D-034): ₪2,990 הקמה פלוס מע"מ, כולל החודש הראשון. מהחודש השני ₪1,490 לחודש פלוס מע"מ. לקוח מייסד ₪1,190, הרצפה ₪2,490 ו-₪790, פלוס מע"מ.`}};
-const kindOf = l => (rec(l.id).summary || {}).calc_type || (/מנעול|חשמל/.test(l.niche || "") || /תיקון/.test(l.name || "") ? "B" : "A");
+const kindOf = l => (rec(l.id).summary || {}).calc_type || (/מנעול|חשמל|מוסכ|מספר|מוני/.test(l.niche || "") || /תיקון/.test(l.name || "") ? "B" : "A");
 const FORM = [
   ["staff","עובדים / מי עונה לטלפון","text"],["visits","ביקורי מדידה (או קריאות) בשבוע","text"],
   ["close","אחוז סגירה אחרי ביקור","text"],["deal","עסקה ממוצעת (₪)","text"],
