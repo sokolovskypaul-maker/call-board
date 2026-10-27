@@ -108,7 +108,8 @@ $("#setPassForm").addEventListener("submit", async e => {
   history.replaceState(null, "", location.pathname);
   const {data} = await sb.auth.getSession(); if (data.session) start(data.session);
 });
-const logout = async () => { stopListening(); await sb.auth.signOut(); location.reload(); };
+let loggingOut = false, loginLost = false;
+const logout = async () => { loggingOut = true; stopListening(); await sb.auth.signOut(); location.reload(); };
 $("#logout").addEventListener("click", logout); $("#logout2").addEventListener("click", logout);
 function showLogin(setPass){
   show("#authView"); $("#loginForm").classList.toggle("hidden", !!setPass); $("#setPassForm").classList.toggle("hidden", !setPass);
@@ -901,7 +902,19 @@ $("#importFile").addEventListener("change", async e => {
 (async () => {
   if (!CFG.url || !CFG.key){ show("#authView"); authMsg("האתר עוד לא חובר לשרת (config.js)."); return; }
   const wantsPassword = /type=(invite|recovery)/.test(AUTH_HASH);
-  sb.auth.onAuthStateChange((event, session) => { if (event === "PASSWORD_RECOVERY") showLogin(true); else if (event === "SIGNED_IN" && session && !wantsPassword && !user) start(session); });
+  // A login that ends while the board is open (its time ran out, or a password change elsewhere ended it) must not leave
+  // saves failing quietly: the login form comes back, unsaved edits stay in this page, and they go out right after logging in.
+  sb.auth.onAuthStateChange((event, session) => {
+    if (event === "PASSWORD_RECOVERY") showLogin(true);
+    else if (event === "SIGNED_IN" && session && !wantsPassword && !user) start(session);
+    else if (event === "SIGNED_IN" && session && user && loginLost){
+      if (session.user.id !== user.id){ location.reload(); return; }
+      loginLost = false; authMsg(""); show("#mainView"); flushAll(); if (busy()) setSync("saving", "מחובר שוב. שומר את מה שחיכה…");
+    }
+    else if (event === "SIGNED_OUT" && user && !loggingOut){
+      loginLost = true; showLogin(false); authMsg("הכניסה ללוח פגה. מתחברים שוב כאן, בלי לרענן את הדף, ומה שלא נשמר יישמר מיד אחרי הכניסה.");
+    }
+  });
   const {data} = await sb.auth.getSession();
   if (data.session && wantsPassword) showLogin(true);
   else if (data.session) start(data.session);
