@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Hebrew:wght@400;500;600;700&family=Suez+One&family=IBM+Plex+Mono:wght@500;600&display=swap">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/dist/umd/supabase.js" integrity="sha384-BWcjm9OdFth9TbhCxZPdm+gAOUMAzQy9nmTs12ioXdCcbVnJaPMn+fMUoQCLt60R" crossorigin="anonymous"></script>
-<script src="config.js?v=2026-10-27r"></script>
+<script src="config.js?v=2026-10-28s"></script>
 <style>
 /* Layout: a two-pane call sheet. The call queue sits on the start side, the open lead's call card beside it; the live call panel sits at the top of the card. One column on phones. */
 :root{
@@ -88,6 +88,7 @@ header.top{padding-block:12px 10px;display:grid;gap:10px;border-bottom:1px solid
 .sc{width:30px;height:30px;border-radius:7px;display:grid;place-items:center;font:600 14px var(--f-num);border:1px solid var(--line);background:var(--sunk);color:var(--ink)}
 .sc.s5{background:var(--tape);color:var(--tape-ink);border-color:transparent}
 .sc.s4{box-shadow:inset 0 -3px 0 var(--tape)}
+.sc.demo{font-size:11px;font-family:var(--f-body);color:var(--ok-ink);background:var(--ok-bg);border-color:transparent}
 .sc.fb{font-size:11px;font-family:var(--f-body);color:var(--info-ink);background:var(--info-bg);border-color:transparent}
 .pill{font-size:12px;border-radius:999px;padding:1px 9px;white-space:nowrap;border:1px solid var(--line);color:var(--muted)}
 .st-noanswer,.st-voicemail{background:var(--warn-bg);color:var(--warn-ink);border-color:transparent}
@@ -286,7 +287,7 @@ details.script summary{cursor:pointer;font-weight:600}
       <div class="rule" id="rule"></div>
       <div class="tools listtools">
         <input type="search" id="q" placeholder="חיפוש: שם, עיר, טלפון, תחום" aria-label="חיפוש">
-        <select id="fSrc" aria-label="מקור"><option value="">כל המקורות</option><option value="g">גוגל מפס</option><option value="f">פייסבוק</option></select>
+        <select id="fSrc" aria-label="מקור"><option value="">כל המקורות</option><option value="g">גוגל מפס</option><option value="f">פייסבוק</option><option value="demo">דמו קולי</option></select>
         <select id="fNiche" aria-label="תחום"><option value="">כל התחומים</option></select>
         <select id="fScore" aria-label="ציון"><option value="0">כל הציונים</option><option value="5">ציון 5</option><option value="4">4 ומעלה</option><option value="3">3 ומעלה</option></select>
         <select id="fStatus" aria-label="סטטוס"><option value="">כל הסטטוסים</option></select>
@@ -304,7 +305,7 @@ details.script summary{cursor:pointer;font-weight:600}
   </section>
 </div>
 
-<script src="engine.js?v=2026-10-27r"></script>
-<script src="app.js?v=2026-10-27r"></script>
+<script src="engine.js?v=2026-10-28s"></script>
+<script src="app.js?v=2026-10-28s"></script>
 </body>
 </html>

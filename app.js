@@ -59,7 +59,7 @@ const blank = () => ({status: "new", attempts: 0, notes: "", callback: "", summa
 const rec = id => byId[id] || blank();
 const trackKind = l => l.track === "ראשית" ? "discovery" : "sales";
 // A lead tagged "תחומים-27.10" in one of Ofek's six niches follows its niche script (inside the sales script) first.
-const nicheLead = l => (l.tags || []).some(t => /תחומים/.test(t)) && !!Engine.nicheRe(l.niche) && /לפי תחום/.test(SCRIPTS.sales || "");
+const nicheLead = l => ((l.tags || []).some(t => /תחומים/.test(t)) || l.src === "demo") && !!Engine.nicheRe(l.niche) && /לפי תחום/.test(SCRIPTS.sales || "");
 const scriptKeys = l => [...(nicheLead(l) ? ["niche"] : []), l.track === "ראשית" ? "discovery" : "sales", ...(SCRIPTS.short ? ["short"] : [])];
 const scriptName = (k, l) => k === "niche" ? `התסריט של ${l.niche}` : SCRIPT_NAMES[k];
 const pickKey = l => "script:" + trackKind(l) + (nicheLead(l) ? ":niche" : "");
@@ -141,6 +141,13 @@ async function start(session){
   else { selId = null; $("#detail").innerHTML = EMPTY_DETAIL; }
   subscribe(); setSync("ok", "מסונכרן");
 }
+// The live channel carries only "calls". A new lead (from a voice demo, see functions/demo-lead) comes with its call record,
+// so its card is fetched once and added to the list, at the top while it is due.
+async function addLead(id){
+  let res = null; try { res = await sb.from("leads").select("id,data").eq("id", id).maybeSingle(); } catch {}
+  if (!res || res.error || !res.data || DATA.some(l => l.id === id)) return;
+  DATA.push({...res.data.data, id: res.data.id}); buildFilters(); renderList();
+}
 function subscribe(){
   if (channel) sb.removeChannel(channel);
   channel = sb.channel("calls-live").on("postgres_changes", {event: "*", schema: "public", table: "calls"}, payload => {
@@ -148,7 +155,9 @@ function subscribe(){
     if (timers.has(row.lead_id) || inflight.get(row.lead_id)) return;   // our own unsaved typing wins locally
     const mine = byId[row.lead_id];                                    // an echo of an older save must not undo newer typing
     if (mine && mine.updated && row.rec && row.rec.updated && mine.updated > row.rec.updated) return;
-    byId[row.lead_id] = row.rec; renderList();
+    byId[row.lead_id] = row.rec;
+    if (!DATA.some(l => l.id === row.lead_id)){ addLead(row.lead_id); return; }   // a lead that arrived after the board loaded (a voice demo)
+    renderList();
     const typing = document.activeElement && $("#detail").contains(document.activeElement) && /INPUT|TEXTAREA/.test(document.activeElement.tagName);
     if (summaryOpen) renderLogSummary();
     else if (row.lead_id === selId && !typing && !(live && live.listening)) renderDetail();
@@ -213,6 +222,7 @@ function rankKey(l){ const r = rec(l.id); let st = {callback: isDue(r) ? 0 : 4, 
   if (l.virtual07 && open) st = 4.5;   // a virtual 07 line rarely reaches the owner: call these last
   if (l.noDial && (open || r.status === "callback")) st = 8.5;   // held until a real number is found
   else if (l.priority && open) st = -1; // a hand-picked call list (e.g. "חם-27.10") goes first, in its own order
+  if (l.inbound && isDue(r)) st = -2;     // he left his details (a voice demo) and was promised a call today: before everything
   return [st, l.priority || 999, l.src === "g" ? 0 : 1, -(l.score || 0), r.attempts || 0, l.order || 0]; }
 function cmp(a, b){ for (let i = 0; i < a.length; i++){ if (a[i] < b[i]) return -1; if (a[i] > b[i]) return 1; } return 0; }
 function filtered(){
@@ -249,7 +259,7 @@ function renderStats(){
 function renderList(){
   const items = filtered();
   $("#list").innerHTML = items.length ? items.map(l => { const r = rec(l.id);
-    const badge = l.src === "g" ? `<span class="sc s${l.score}" title="ציון התאמה ${l.score}">${l.score}</span>` : `<span class="sc fb" title="פייסבוק">FB</span>`;
+    const badge = l.src === "g" ? `<span class="sc s${l.score}" title="ציון התאמה ${l.score}">${l.score}</span>` : l.src === "demo" ? `<span class="sc demo" title="השאיר פרטים בדמו הקולי של אלה">דמו</span>` : `<span class="sc fb" title="פייסבוק">FB</span>`;
     const when = isDue(r) ? ` · <span class="due">לחזור עכשיו</span>` : (["callback", "booked", "demo"].includes(r.status) && r.callback ? ` · ${fmtDT(r.callback)}` : "");
     const tagPills = (l.tags || []).map(t => `<span class="tag">${esc(t)}${l.priority ? " · " + l.priority : ""}</span> `).join("");
     const flags = (l.noDial ? ` · <span class="flag">לא לחייג</span>` : "") + (l.phoneMismatch ? ` · <span class="flag">מספר מהאתר</span>` : "") + (l.virtual07 ? ` · <span class="flag dim">07</span>` : "") + ((sttState.get(l.id) || {}).state === "running" ? ` · <span class="flag dim">מתמלל…</span>` : "");
@@ -430,7 +440,8 @@ function renderDetail(){
     + (l.virtual07 ? `<div class="note">המספר הרשום הוא קו 07 וירטואלי. לרוב הוא מגיע למוקד או להפניה, ולא לבעל העסק, ולכן הליד בסוף התור.</div>` : "");
   const links = [l.website && `<a href="${esc(l.website)}" target="_blank" rel="noopener noreferrer">אתר העסק</a>`, l.maps && `<a href="${esc(l.maps)}" target="_blank" rel="noopener noreferrer">גוגל מפס</a>`,
     l.post && `<a href="${esc(l.post)}" target="_blank" rel="noopener noreferrer">הפוסט בפייסבוק</a>`, l.groupUrl && `<a href="${esc(l.groupUrl)}" target="_blank" rel="noopener noreferrer">הקבוצה: ${esc(l.group)}</a>`].filter(Boolean).join("");
-  const meta = l.src === "g" ? `${esc(l.niche)} · ציון ${esc(l.score)}${l.rating ? ` · גוגל ${esc(l.rating)} (${esc(l.reviews)})` : ""}` : `פייסבוק · ${esc(l.niche)} · פורסם ${esc(l.date)}`;
+  const meta = l.src === "g" ? `${esc(l.niche)} · ציון ${esc(l.score)}${l.rating ? ` · גוגל ${esc(l.rating)} (${esc(l.reviews)})` : ""}`
+    : l.src === "demo" ? `השאיר פרטים בדמו הקולי · ${esc(l.niche)}${l.createdAt ? ` · ${fmtDT(l.createdAt)}` : ""}` : `פייסבוק · ${esc(l.niche)} · פורסם ${esc(l.date)}`;
   const facts = [kv("מה העסק עושה", l.what), kv("ביקור מדידה חינם", l.free), kv("הבטחת זמן תגובה", l.resp), kv("וואטסאפ באתר", l.wa), kv("טופס באתר", l.form), kv("בעלים מפעיל", l.owner), kv("טלפון נוסף באתר", l.sitePhone), kv("הערות מהאיסוף", l.notes)].join("");
   const scripts = scriptKeys(l).filter(k => SCRIPTS[k]).map(k => `<details class="script"><summary>${SCRIPT_NAMES[k]}, הטקסט המלא</summary><div class="md">${mdToHtml(SCRIPTS[k])}</div></details>`).join("");
   $("#detail").innerHTML = `
