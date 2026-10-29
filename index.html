@@ -6,7 +6,7 @@
 <meta name="robots" content="noindex, nofollow">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src https://tcxflzcmxsfefxorcdov.supabase.co wss://tcxflzcmxsfefxorcdov.supabase.co http://127.0.0.1:8178; media-src https://tcxflzcmxsfefxorcdov.supabase.co blob:; img-src 'self' data:; base-uri 'none'; form-action 'none'; object-src 'none'">
 <meta name="referrer" content="no-referrer">
-<title>לוח שיחות</title>
+<title>חמ״ל</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Hebrew:wght@400;500;600;700&family=Suez+One&family=IBM+Plex+Mono:wght@500;600&display=swap">
@@ -223,6 +223,44 @@ details.more summary{cursor:pointer;font-weight:600}
 .kv .k{font-size:11.5px;color:var(--muted);letter-spacing:.3px;margin-bottom:2px}
 section.box{margin-top:18px;padding-top:14px;border-top:1px solid var(--line);display:grid;gap:10px}
 section.box h3{font-size:15px;margin:0}
+/* the screens: tabs at the top; the home screen hides the leads screen's tools and panes */
+.views{display:flex;gap:2px;padding:3px;border:1px solid var(--line);border-radius:10px;background:var(--sunk)}
+.views button{border:0;background:none;padding:6px 12px;border-radius:7px;cursor:pointer;color:var(--muted);font-weight:600;font-size:13.5px;min-height:34px}
+.views button[aria-current="page"]{background:var(--panel);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.12)}
+.app[data-screen="home"] .layout,.app[data-screen="home"] .listtools,.app[data-screen="home"] #rule,.app[data-screen="home"] #stats{display:none}
+.app:not([data-screen="home"]) #homeView{display:none}
+/* the home screen: today in four numbers, the next booked call, a month of dials, and a door to every screen */
+.home{display:grid;gap:14px;padding-block:16px 8px;max-width:980px;margin-inline:auto}
+.hrow{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.htile{display:grid;gap:2px;padding:14px 16px;border:1px solid var(--line);border-radius:12px;background:var(--panel)}
+.htile span{font-size:13px;color:var(--muted);font-weight:600}
+.htile b{font:600 34px/1.1 var(--f-num);font-variant-numeric:tabular-nums}
+.htile small{font-size:12.5px;color:var(--muted)}
+.htile.alert b{color:var(--rec)}
+.hnext{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:12px 16px;border:1px solid var(--line);border-inline-start:4px solid var(--call);border-radius:12px;background:var(--panel)}
+.hnext .k{font-size:13px;color:var(--muted);font-weight:600}
+.hnext .nm{flex:1;min-width:0}
+.hcal{display:grid;gap:10px;padding:14px 16px;border:1px solid var(--line);border-radius:12px;background:var(--panel)}
+.hcal-h{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.hgrid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}
+.hwd{font-size:12px;color:var(--muted);text-align:center;font-weight:600}
+.hday{display:grid;align-content:start;justify-items:center;gap:1px;min-height:56px;padding:4px 2px;border:1px solid var(--line);border-radius:8px;background:var(--sunk);cursor:pointer;color:var(--ink)}
+.hday.empty{border:0;background:none;cursor:default}
+.hday .dn{font-size:12px;color:var(--muted)}
+.hday b{font:600 17px/1.1 var(--f-num)}
+.hday small{font-size:10.5px;color:var(--muted);white-space:nowrap}
+.hday.has{background:var(--ok-bg);border-color:transparent}
+.hday.has b,.hday.has small{color:var(--ok-ink)}
+.hday.today{outline:2px solid var(--call);outline-offset:-2px}
+.hday.on{box-shadow:0 0 0 3px var(--focus)}
+@media (max-width:520px){.hday small{display:none}.hday{min-height:46px}}
+.hdaylist{display:grid;gap:8px}
+.hdaylist h3{font-size:14.5px;margin:0}
+.hnav{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px}
+.hgo{display:grid;gap:4px;text-align:start;padding:14px 16px;border:1px solid var(--line);border-radius:12px;background:var(--panel);cursor:pointer;color:var(--ink);min-height:64px}
+.hgo b{font:400 18px var(--f-display)}
+.hgo span{font-size:13px;color:var(--muted)}
+.hgo:hover,.hday:not(.empty):hover{border-color:var(--ink)}
 /* the calls diary: booked calls as rows, and a small table per day */
 .dstats{margin-top:10px}
 .dlist{list-style:none;margin:0;padding:0;display:grid;gap:6px}
@@ -276,7 +314,7 @@ details.script summary{cursor:pointer;font-weight:600}
 
   <section class="auth hidden" id="authView" aria-labelledby="authTitle">
     <div class="tape" aria-hidden="true"></div>
-    <h1 id="authTitle">לוח שיחות</h1>
+    <h1 id="authTitle">חמ״ל</h1>
     <form id="loginForm" class="auth-form" style="display:grid;gap:10px">
       <label for="loginEmail">מייל<input type="email" id="loginEmail" autocomplete="username" required dir="ltr"></label>
       <label for="loginPass">סיסמה<input type="password" id="loginPass" autocomplete="current-password" required dir="ltr"></label>
@@ -299,7 +337,8 @@ details.script summary{cursor:pointer;font-weight:600}
     <header class="top">
       <div class="tape" aria-hidden="true"></div>
       <div class="titlerow">
-        <h1>לוח שיחות</h1>
+        <h1>חמ״ל</h1>
+        <nav class="views" aria-label="מסכים"><button type="button" data-view="home">בית</button><button type="button" data-view="leads">לידים</button><button type="button" data-view="diary">יומן שיחות</button><button type="button" data-view="logs">סיכום רישומים</button></nav>
         <span class="sync" id="sync"><span class="dot"></span><span id="syncText">מתחבר…</span></span>
         <span class="who" id="whoami"></span>
         <button type="button" class="btn sm" id="logout">יציאה</button>
@@ -320,6 +359,7 @@ details.script summary{cursor:pointer;font-weight:600}
         <input type="file" id="importFile" accept=".json,application/json" class="hidden">
       </div>
     </header>
+    <div class="home" id="homeView"></div>
     <div class="layout">
       <div id="list" role="list"></div>
       <div id="detail"><div class="empty"><b>בחר עסק מהרשימה</b>יופיעו כאן הטלפון, התדריך וכפתור השיחה. בסוף כל שיחה הכרטיס מתמלא לבד, ונשמר אצל כל הצוות.</div></div>
@@ -327,8 +367,8 @@ details.script summary{cursor:pointer;font-weight:600}
   </section>
 </div>
 
-<script src="engine.js?v=2026-10-29u"></script>
-<script src="tips.js?v=2026-10-29u"></script>
-<script src="app.js?v=2026-10-29u"></script>
+<script src="engine.js?v=2026-10-29x"></script>
+<script src="tips.js?v=2026-10-29x"></script>
+<script src="app.js?v=2026-10-29x"></script>
 </body>
 </html>

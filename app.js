@@ -141,6 +141,7 @@ async function start(session){
   if (!DATA.length) $("#detail").innerHTML = `<div class="empty"><b>אין עדיין לידים</b>${isAdmin ? "לחץ \"ייבוא נתונים (מנהל)\" ובחר את קובץ הנתונים." : "פול עוד לא ייבא את הלידים."}</div>`;
   else if (DATA.some(l => l.id === selId)) renderDetail();
   else { selId = null; $("#detail").innerHTML = EMPTY_DETAIL; }
+  setView(view);
   subscribe(); setSync("ok", "מסונכרן");
 }
 // The live channel carries only "calls". A new lead (from a voice demo, see functions/demo-lead) comes with its call record,
@@ -269,11 +270,12 @@ function renderList(){
     return `<button type="button" role="listitem" class="row ${l.id === selId ? "sel" : ""}" data-id="${esc(l.id)}">${badge}<span style="min-width:0"><span class="nm">${esc(l.name)}</span><span class="sub">${tagPills}${esc(l.niche)}${l.brief?.owner ? " · " + esc(l.brief.owner) : ""} · ${esc(l.area || "אזור לא ידוע")}${flags}${when}</span></span><span class="pill st-${r.status}">${SLABEL[r.status] || ""}${r.attempts ? ` ×${r.attempts}` : ""}</span></button>`;
   }).join("") : (DATA.length ? `<div class="empty"><b>אין תוצאות</b>נסה לנקות את החיפוש או את הסינון.</div>` : "");
   renderStats();
+  if (view === "home") renderHome();
 }
 $("#list").addEventListener("click", e => {
   const row = e.target.closest(".row"); if (!row) return;
   if (live && live.listening && row.dataset.id !== selId){ setSync("err", "יש הקשבה פעילה. סיים את השיחה לפני שעוברים לעסק אחר"); return; }
-  selId = row.dataset.id; renderList(); renderDetail(); app.classList.add("showdetail");
+  selId = row.dataset.id; if (view !== "leads") markView("leads"); renderList(); renderDetail(); app.classList.add("showdetail");
   $("#detail").scrollTop = 0; if (matchMedia("(max-width:860px)").matches) window.scrollTo(0, 0);
 });
 
@@ -534,7 +536,7 @@ function renderLogSummary(){
       ${n < 10 ? `<div class="note">עם פחות מ-10 רישומים זה עוד לא אומר הרבה.</div>` : ""}</section>
     <section class="box"><h3>מה הייתי משנה בתסריט (האחרונים)</h3>${changes.length ? `<ul class="qs">${changes.map(x => `<li>${esc(x.change)} <span class="note">· ${esc(x.lead.name)}, ${fmtDT(x.at)}</span></li>`).join("")}</ul>` : `<div class="note">עוד אין הצעות.</div>`}</section>`;
 }
-$("#logsSummary")?.addEventListener("click", () => { renderLogSummary(); app.classList.add("showdetail"); $("#detail").scrollTop = 0; });
+$("#logsSummary")?.addEventListener("click", () => setView("logs"));
 
 // ---------- the calls diary: what is booked (today, later, passed) and how many dials and conversations a day ----------
 // A dial is a call started on the board (calls[]), or a status Paul marked by hand with no board call just before it.
@@ -594,7 +596,60 @@ function renderDiary(){
     <section class="box"><h3>לפי יום</h3>${rows.length ? `<div class="dtable"><table><thead><tr><th>יום</th><th>חיוגים</th><th>דיברתי עם</th><th>נקבעו שיחות</th></tr></thead><tbody>${rows.map(([k, d]) => `<tr><td>${esc(new Date(k + "T12:00").toLocaleDateString("he-IL", {weekday: "short", day: "2-digit", month: "2-digit"}))}</td><td>${d.dials}</td><td>${d.talked}</td><td>${d.set}</td></tr>`).join("")}</tbody></table></div>` : `<div class="note">עוד אין חיוגים רשומים.</div>`}
       <div class="note">חיוג הוא שיחה שהתחלת מהלוח, או סטטוס שסימנת ביד. "דיברתי עם" הוא כל חיוג שענו בו.</div></section>`;
 }
-$("#callsDiary")?.addEventListener("click", () => { renderDiary(); app.classList.add("showdetail"); $("#detail").scrollTop = 0; });
+$("#callsDiary")?.addEventListener("click", () => setView("diary"));
+
+// ---------- the screens: home (the dashboard), leads, the calls diary, the logs summary ----------
+// The tabs at the top switch screens; the choice is remembered on this computer. Opening a lead always shows the leads screen.
+let view = (() => { try { return localStorage.getItem("view") || "home"; } catch { return "home"; } })(), homeMonth = null, homeDay = "";
+function markView(v){
+  view = v; try { localStorage.setItem("view", v); } catch {}
+  app.dataset.screen = v === "home" ? "home" : "leads";
+  document.querySelectorAll(".views [data-view]").forEach(b => b.setAttribute("aria-current", b.dataset.view === v ? "page" : "false"));
+}
+function setView(v){
+  markView(v);
+  if (v === "home") renderHome();
+  else if (v === "diary"){ renderDiary(); app.classList.add("showdetail"); $("#detail").scrollTop = 0; }
+  else if (v === "logs"){ renderLogSummary(); app.classList.add("showdetail"); $("#detail").scrollTop = 0; }
+  else if (summaryOpen){ summaryOpen = diaryOpen = false; if (selId) renderDetail(); else $("#detail").innerHTML = EMPTY_DETAIL; app.classList.toggle("showdetail", !!selId); }
+  window.scrollTo(0, 0);
+}
+// Every dial with its lead, for the home screen's numbers and its calendar.
+const allDials = () => DATA.flatMap(l => { const r = rec(l.id); return dialsOf(r).map(x => ({...x, l, r})); }).sort((a, b) => a.t - b.t);
+function renderHome(){
+  const el = $("#homeView"); if (!el || view !== "home") return;
+  const D = diaryData(), dials = allDials(), now = new Date(), today = D.today, td = D.days[today] || {dials: 0, talked: 0, set: 0};
+  const due = DATA.filter(l => isDue(rec(l.id))).length, fresh = DATA.filter(l => rec(l.id).status === "new").length;
+  const next = D.later[0], first = dials[0];
+  if (!homeMonth){ homeMonth = new Date(now.getFullYear(), now.getMonth(), 1); }
+  const tile = (k, v, sub, alert) => `<div class="htile${alert ? " alert" : ""}"><span>${k}</span><b>${v}</b>${sub ? `<small>${sub}</small>` : ""}</div>`;
+  // the month: a cell per day, with that day's dials and conversations
+  const m0 = homeMonth, y = m0.getFullYear(), mo = m0.getMonth(), days = new Date(y, mo + 1, 0).getDate(), lead = new Date(y, mo, 1).getDay();
+  const cells = [...Array(lead)].map(() => `<span class="hday empty"></span>`).concat([...Array(days)].map((_, i) => {
+    const k = dayKey(new Date(y, mo, i + 1)), d = D.days[k];
+    return `<button type="button" class="hday${k === today ? " today" : ""}${k === homeDay ? " on" : ""}${d && d.dials ? " has" : ""}" data-hday="${k}" aria-label="${i + 1} בחודש: ${d ? d.dials : 0} חיוגים"><span class="dn">${i + 1}</span>${d && d.dials ? `<b>${d.dials}</b><small>${d.talked} דיברתי</small>` : ""}</button>`; })).join("");
+  const dayList = homeDay ? (() => { const list = dials.filter(x => dayKey(x.t) === homeDay), dd = D.days[homeDay] || {dials: 0, talked: 0, set: 0};
+    const name = new Date(homeDay + "T12:00").toLocaleDateString("he-IL", {weekday: "long", day: "numeric", month: "long"});
+    return `<div class="hdaylist"><h3>${esc(name)} · ${dd.dials} חיוגים · דיברתי עם ${dd.talked}${dd.set ? ` · נקבעו ${dd.set}` : ""}</h3>${list.length ? `<ul class="dlist">${list.map(x => `<li class="drow"><b class="dtime">${esc(hhmm(x.t))}</b><span class="dname">${esc(shortName(x.l.name))}</span><span class="pill dst ${x.talked ? "st-done" : "st-noanswer"}">${x.talked ? "דיברתי" : "לא ענה"}</span><button type="button" class="btn sm" data-open="${esc(x.l.id)}">פתח</button></li>`).join("")}</ul>` : `<div class="note">אין חיוגים ביום הזה.</div>`}</div>`; })() : "";
+  const go = (v, k, sub) => `<button type="button" class="hgo" data-go="${v}"><b>${k}</b><span>${sub}</span></button>`;
+  el.innerHTML = `
+    <section class="hrow">${tile("חיוגים היום", td.dials, `דיברתי עם ${td.talked}`)}${tile("עד היום", dials.length, `דיברתי עם ${dials.filter(x => x.talked).length}${first ? ` · מאז ${new Date(first.t).toLocaleDateString("he-IL", {day: "numeric", month: "numeric"})}` : ""}`)}${tile("נקבעו להמשך", D.later.length, td.set ? `${td.set} נקבעו היום` : "")}${tile("לחזור עכשיו", due, due ? "עבר המועד" : "", due > 0)}</section>
+    <section class="hnext">${next ? `<span class="k">השיחה הבאה</span><b>${esc(dayKey(next.t) === today ? "היום " + hhmm(next.at) : fmtDT(next.at))}</b><span class="nm">${esc(shortName(next.l.name))}</span><button type="button" class="btn sm" data-open="${esc(next.l.id)}">פתח</button>` : `<span class="k">השיחה הבאה</span><span class="nm">אין שיחה שנקבעה. ${fresh} לידים מחכים לשיחה ראשונה.</span><button type="button" class="btn sm" data-go="leads">ללידים</button>`}</section>
+    <section class="hcal" aria-label="חיוגים לפי יום">
+      <div class="hcal-h"><button type="button" class="btn sm" data-hmonth="-1" aria-label="החודש הקודם">→</button><b>${esc(m0.toLocaleDateString("he-IL", {month: "long", year: "numeric"}))}</b><button type="button" class="btn sm" data-hmonth="1" aria-label="החודש הבא">←</button></div>
+      <div class="hgrid">${["א׳", "ב׳", "ג׳", "ד׳", "ה׳", "ו׳", "ש׳"].map(d => `<span class="hwd">${d}</span>`).join("")}${cells}</div>
+      ${dayList || `<div class="note">לוחצים על יום כדי לראות עם מי דיברת בו.</div>`}
+    </section>
+    <section class="hnav">${go("leads", "לוח הלידים", `${DATA.length} לידים · ${fresh} עוד לא התקשרתי`)}${go("diary", "יומן השיחות", `${D.later.length} נקבעו להמשך${D.missed.length ? ` · ${D.missed.length} עבר המועד` : ""}`)}${go("logs", "סיכום רישומים", "איפה מנתקים, ההתנגדויות שחוזרות")}${go("csv", "ייצוא יומן", "קובץ CSV של כל השיחות")}</section>`;
+}
+$("#homeView")?.addEventListener("click", e => {
+  const t = e.target;
+  const hd = t.closest("[data-hday]"); if (hd){ homeDay = homeDay === hd.dataset.hday ? "" : hd.dataset.hday; renderHome(); return; }
+  const hm = t.closest("[data-hmonth]"); if (hm){ homeMonth = new Date(homeMonth.getFullYear(), homeMonth.getMonth() + +hm.dataset.hmonth, 1); homeDay = ""; renderHome(); return; }
+  const g = t.closest("[data-go]"); if (g){ if (g.dataset.go === "csv") $("#exportCsv").click(); else setView(g.dataset.go); return; }
+  const o = t.closest("[data-open]"); if (o && DATA.some(l => l.id === o.dataset.open)){ selId = o.dataset.open; setView("leads"); renderList(); renderDetail(); app.classList.add("showdetail"); $("#detail").scrollTop = 0; }
+});
+document.querySelectorAll(".views [data-view]").forEach(b => b.addEventListener("click", () => setView(b.dataset.view)));
 
 // ---------- calculator: missed calls a week × average job × close rate = what he loses a month ----------
 // The same inputs appear in the card and inside each script; all copies stay in step and save to the lead's summary.
@@ -638,8 +693,8 @@ $("#detail").addEventListener("click", async e => {
   if (stt && selId && !stt.disabled){ transcribeRecording(selId, stt); return; }
   const mac = t.closest("[data-mac]"); if (mac && selId && !mac.disabled){ transcribeOnMac(selId, mac.dataset.mac, mac); return; }
   const dop = t.closest("[data-open]");
-  if (dop && DATA.some(l => l.id === dop.dataset.open)){ summaryOpen = diaryOpen = false; selId = dop.dataset.open; renderList(); renderDetail(); $("#detail").scrollTop = 0; return; }
-  if (t.closest("#summaryClose")){ summaryOpen = diaryOpen = false; if (selId) renderDetail(); else $("#detail").innerHTML = EMPTY_DETAIL; app.classList.toggle("showdetail", !!selId); return; }
+  if (dop && DATA.some(l => l.id === dop.dataset.open)){ summaryOpen = diaryOpen = false; markView("leads"); selId = dop.dataset.open; renderList(); renderDetail(); $("#detail").scrollTop = 0; return; }
+  if (t.closest("#summaryClose")){ summaryOpen = diaryOpen = false; markView("leads"); if (selId) renderDetail(); else $("#detail").innerHTML = EMPTY_DETAIL; app.classList.toggle("showdetail", !!selId); return; }
   if (t.closest("#callGoto") && call){ selId = call.id; renderList(); renderDetail(); return; }
   const tf = t.closest("[data-trfill]");
   if (tf && trCache[tf.dataset.trfill] && selId){ fillFromTranscript(selId, tf.dataset.trfill); return; }
