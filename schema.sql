@@ -27,14 +27,21 @@ create table if not exists public.config (
   updated_at timestamptz not null default now()
 );
 
+-- The code from the phone: a member who turned it on gets data only in a session that passed it (aal2).
+-- A member without a code is not affected. The board asks for the code right after the password.
+create or replace function public.mfa_ok() returns boolean
+  language sql stable security definer set search_path = ''
+  as $$ select coalesce(auth.jwt()->>'aal', 'aal1') = 'aal2'
+         or not exists (select 1 from auth.mfa_factors f where f.user_id = auth.uid() and f.status = 'verified'); $$;
+
 -- Membership checks run as definer so policies on members do not recurse.
 create or replace function public.is_member() returns boolean
   language sql stable security definer set search_path = public
-  as $$ select exists (select 1 from public.members where user_id = auth.uid()); $$;
+  as $$ select public.mfa_ok() and exists (select 1 from public.members where user_id = auth.uid()); $$;
 
 create or replace function public.is_admin() returns boolean
   language sql stable security definer set search_path = public
-  as $$ select exists (select 1 from public.members where user_id = auth.uid() and role = 'admin'); $$;
+  as $$ select public.mfa_ok() and exists (select 1 from public.members where user_id = auth.uid() and role = 'admin'); $$;
 
 -- Table privileges: only signed-in users reach the tables at all (anonymous visitors get nothing); the policies below narrow it per row.
 -- Needed when the project is created with "Automatically expose new tables" off.
@@ -42,8 +49,8 @@ revoke all on public.members, public.leads, public.calls, public.config from ano
 grant select on public.members to authenticated;
 grant select, insert, update, delete on public.leads, public.config to authenticated;
 grant select, insert, update on public.calls to authenticated;
-revoke execute on function public.is_member(), public.is_admin() from public, anon;
-grant execute on function public.is_member(), public.is_admin() to authenticated;
+revoke execute on function public.mfa_ok(), public.is_member(), public.is_admin() from public, anon;
+grant execute on function public.mfa_ok(), public.is_member(), public.is_admin() to authenticated;
 
 alter table public.members enable row level security;
 alter table public.leads   enable row level security;

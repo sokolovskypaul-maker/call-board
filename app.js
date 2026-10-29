@@ -116,11 +116,68 @@ let loggingOut = false, loginLost = false;
 const logout = async () => { loggingOut = true; stopListening(); await sb.auth.signOut(); location.reload(); };
 $("#logout").addEventListener("click", logout); $("#logout2").addEventListener("click", logout);
 function showLogin(setPass){
-  show("#authView"); $("#loginForm").classList.toggle("hidden", !!setPass); $("#setPassForm").classList.toggle("hidden", !setPass);
+  show("#authView"); $("#loginForm").classList.toggle("hidden", !!setPass); $("#setPassForm").classList.toggle("hidden", !setPass); $("#mfaForm").classList.add("hidden");
 }
+
+// ---------- the code from the phone (TOTP) ----------
+// A member who turned it on gets the data only after the 6 digits: the database checks the session's level (aal2, see
+// mfa_ok() in schema.sql). So after the password the board asks for the code, before it loads anything.
+// "🔐" in the header turns it on: a QR code for the authenticator app, then the first 6 digits it shows.
+async function needsMfa(){
+  try { const {data} = await sb.auth.mfa.getAuthenticatorAssuranceLevel(); return !!data && data.nextLevel === "aal2" && data.currentLevel !== "aal2"; }
+  catch { return false; }
+}
+let afterMfa = null;   // what to do once the code is accepted
+let mfaPending = null; // a setup started on this page and not finished yet
+function showMfa(then){
+  afterMfa = then; show("#authView");
+  $("#loginForm").classList.add("hidden"); $("#setPassForm").classList.add("hidden"); $("#mfaForm").classList.remove("hidden");
+  if (!$("#mfaCode").value) setTimeout(() => $("#mfaCode").focus(), 50);   // shown again (the tab woke up): keep what was typed
+}
+// The library hands the QR code as "data:image/svg+xml;utf-8,<svg…>" with the SVG raw, where a "#" would cut it: encode it again.
+const qrSrc = q => { const s = String(q || ""), raw = s.startsWith("data:") ? s.slice(s.indexOf(",") + 1) : s;
+  let svg = raw; if (!raw.trimStart().startsWith("<")) try { svg = decodeURIComponent(raw); } catch {}
+  return "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg); };
+$("#mfaForm").addEventListener("submit", async e => {
+  e.preventDefault(); authMsg("");
+  const code = $("#mfaCode").value.replace(/\D/g, "");
+  const {data: f} = await sb.auth.mfa.listFactors(), factor = f && (f.totp || []).find(x => x.status === "verified");
+  if (!factor){ authMsg("לא נמצא קוד מוגדר בחשבון."); return; }
+  const {error} = await sb.auth.mfa.challengeAndVerify({factorId: factor.id, code});
+  if (error){ authMsg("הקוד לא נכון או שעבר הזמן שלו. מקלידים את הקוד שמופיע עכשיו באפליקציה."); $("#mfaCode").select(); return; }
+  const go = afterMfa; afterMfa = null; authMsg(""); $("#mfaCode").value = "";
+  const {data} = await sb.auth.getSession(); if (go && data.session) go(data.session);
+});
+$("#mfaClose").addEventListener("click", () => $("#mfaDialog").close());
+$("#mfaBtn").addEventListener("click", async () => {
+  const d = $("#mfaDialog"), body = $("#mfaBody"); d.showModal(); body.innerHTML = `<div class="note">בודק…</div>`;
+  const {data: f, error} = await sb.auth.mfa.listFactors();
+  if (error){ body.innerHTML = `<div class="msg">לא הצלחתי לבדוק. נסה שוב.</div>`; return; }
+  if ((f.totp || []).some(x => x.status === "verified")){
+    body.innerHTML = `<div class="msg ok">✓ הקוד מהטלפון פעיל בחשבון הזה. כל כניסה מבקשת 6 ספרות מהאפליקציה.</div>
+      <div class="note">אם הטלפון אבד: מסירים את הקוד מהחשבון בלוח הבקרה של <bdi dir="ltr">Supabase</bdi> (ברשימת המשתמשים), ואז מגדירים מחדש כאן.</div>`; return; }
+  if (!mfaPending){   // one setup per page: opening this again shows the same QR code instead of starting another
+    const {data, error: e2} = await sb.auth.mfa.enroll({factorType: "totp", friendlyName: "phone " + new Date().toISOString().slice(0, 19)});
+    if (e2 || !data){ body.innerHTML = `<div class="msg">ההגדרה לא התחילה. נסה שוב.</div>`; return; }
+    mfaPending = data;
+  }
+  const en = mfaPending;
+  body.innerHTML = `<ol class="qs"><li>פותחים את אפליקציית האימות (למשל <bdi dir="ltr">Google Authenticator</bdi>), לוחצים "+" ובוחרים סריקת קוד QR.</li><li>סורקים את הקוד הזה.</li><li>מקלידים כאן את 6 הספרות שהאפליקציה מציגה.</li></ol>
+    <img class="mfa-qr" alt="קוד QR להגדרה באפליקציה" src="${esc(qrSrc(en.totp.qr_code))}">
+    <div class="note">אין אפשרות לסרוק? מקלידים באפליקציה את המפתח: <code dir="ltr">${esc(en.totp.secret)}</code></div>
+    <form id="mfaEnrollForm" class="inline" style="margin-top:8px"><input type="text" id="mfaEnrollCode" inputmode="numeric" autocomplete="one-time-code" required dir="ltr" placeholder="123456" aria-label="6 הספרות מהאפליקציה"><button type="submit" class="btn primary sm">הפעלה</button></form>
+    <div class="note" id="mfaEnrollMsg" role="status"></div>`;
+  $("#mfaEnrollForm").addEventListener("submit", async ev => {
+    ev.preventDefault();
+    const {error: e3} = await sb.auth.mfa.challengeAndVerify({factorId: en.id, code: $("#mfaEnrollCode").value.replace(/\D/g, "")});
+    if (e3){ $("#mfaEnrollMsg").textContent = "הקוד לא התאים. מקלידים את הקוד שמופיע עכשיו באפליקציה."; return; }
+    mfaPending = null; body.innerHTML = `<div class="msg ok">✓ הקוד מהטלפון הופעל. מעכשיו כל כניסה תבקש 6 ספרות מהאפליקציה.</div>`;
+  });
+});
 
 // ---------- data ----------
 async function start(session){
+  if (await needsMfa()){ showMfa(start); return; }   // a code from the phone is on: nothing loads before it
   user = session.user;
   const mem = await sb.from("members").select("role").eq("user_id", user.id).maybeSingle();
   if (mem.error || !mem.data){ show("#noAccess"); return; }
@@ -1418,7 +1475,8 @@ $("#importFile").addEventListener("change", async e => {
     else if (event === "SIGNED_IN" && session && !wantsPassword && !user) start(session);
     else if (event === "SIGNED_IN" && session && user && loginLost){
       if (session.user.id !== user.id){ location.reload(); return; }
-      loginLost = false; authMsg(""); show("#mainView"); flushAll(); if (busy()) setSync("saving", "מחובר שוב. שומר את מה שחיכה…");
+      const back = () => { loginLost = false; authMsg(""); show("#mainView"); flushAll(); if (busy()) setSync("saving", "מחובר שוב. שומר את מה שחיכה…"); };
+      needsMfa().then(m => m ? showMfa(back) : back());
     }
     else if (event === "SIGNED_OUT" && user && !loggingOut){
       loginLost = true; showLogin(false); authMsg("הכניסה ללוח פגה. מתחברים שוב כאן, בלי לרענן את הדף, ומה שלא נשמר יישמר מיד אחרי הכניסה.");
