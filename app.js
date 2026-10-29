@@ -11,15 +11,14 @@ const sb = window.supabase.createClient(CFG.url, CFG.key, {auth: {persistSession
 // ---------- constants ----------
 const STATUSES = [["new","לא התקשרתי"],["noanswer","לא ענה"],["voicemail","השארתי הודעה"],["callback","לחזור אליו"],["booked","נקבעה שיחה"],["done","שיחת היכרות בוצעה"],["demo","נקבע דמו"],["won","סגר"],["notrelevant","לא רלוונטי"],["dnc","ביקש לא להתקשר"]];
 const SLABEL = Object.fromEntries(STATUSES);
-// Every price we quote is before VAT (Israeli VAT, 18% since 2025). Prices follow cold-call-short-v3:
-// type B = repairs and service calls (D-028), type A = projects (D-034). Since 27.10 garages, barbers and taxis are type B
-// too; car lots, real estate and moving companies stay type A.
+// Every price we quote is before VAT (Israeli VAT, 18% since 2025). Type B = repairs and service calls, type A = projects.
+// The prices, the tips and the decision rule are the team's playbook: they are not in this public code but in the database
+// (config, key "playbook"), read after login like the scripts. Without it the board works, minus prices and the rule.
 const VAT = 0.18;
 const ils = n => "₪" + Math.round(n).toLocaleString("he-IL");
 const withVat = n => `${ils(n)} פלוס מע"מ (${ils(n * (1 + VAT))} כולל מע"מ)`;
-const PRICES = {
-  B: {monthly: 790, pilot: 490, text: `סוג ב׳ (D-028): ₪2,490 הקמה ו-₪790 לחודש, פלוס מע"מ. פיילוט ל-5 הראשונים: ₪1,490 הקמה ו-₪490 לחודש, פלוס מע"מ, בתמורה להמלצה מוקלטת.`},
-  A: {monthly: 1490, setup: 2990, text: `סוג א׳ (D-034): ₪2,990 הקמה פלוס מע"מ, כולל החודש הראשון. מהחודש השני ₪1,490 לחודש פלוס מע"מ. לקוח מייסד ₪1,190, הרצפה ₪2,490 ו-₪790, פלוס מע"מ.`}};
+let PLAYBOOK = {}, PRICES = {A: {}, B: {}};
+const tpl = (s, v) => String(s || "").replace(/\{(\w+)\}/g, (m, k) => v[k] ?? m);
 const kindOf = l => (rec(l.id).summary || {}).calc_type || (/מנעול|חשמל|מוסכ|מספר|מוני/.test(l.niche || "") || /תיקון/.test(l.name || "") ? "B" : "A");
 const FORM = [
   ["staff","עובדים / מי עונה לטלפון","text"],["visits","ביקורי מדידה (או קריאות) בשבוע","text"],
@@ -133,7 +132,9 @@ async function start(session){
     sb.from("leads").select("id,data").limit(5000),
     sb.from("calls").select("lead_id,rec").limit(5000)]);
   if (cfg.error || leads.error || calls.error){ setSync("err", "הטעינה נכשלה. רענן את הדף"); return; }
-  const scripts = (cfg.data || []).find(r => r.key === "scripts"); if (scripts) SCRIPTS = scripts.value; models.clear();
+  const scripts = (cfg.data || []).find(r => r.key === "scripts"); if (scripts) SCRIPTS = scripts.value;
+  const pb = (cfg.data || []).find(r => r.key === "playbook"); PLAYBOOK = (pb && pb.value) || {};
+  PRICES = {A: {}, B: {}, ...(PLAYBOOK.prices || {})}; Engine.configure(PLAYBOOK.engine || {}); models.clear();
   const tips = (cfg.data || []).find(r => r.key === "tips"); TIPS = Tips.rules(tips && tips.value);
   DATA = (leads.data || []).map(r => ({...r.data, id: r.id})).sort((a, b) => (a.order || 0) - (b.order || 0));
   for (const r of calls.data || []) byId[r.lead_id] = r.rec;
@@ -251,14 +252,16 @@ function renderStats(){
   const demos = recs.filter(([, r]) => r.status === "demo").length, won = recs.filter(([, r]) => r.status === "won").length;
   const stat = (k, v, alert) => `<div class="stat"><span>${k}</span><b class="${alert ? "alert" : ""}">${v}</b></div>`;
   const nLogs = DATA.reduce((a, l) => a + (rec(l.id).logs || []).length, 0), lsBtn = $("#logsSummary"); if (lsBtn) lsBtn.textContent = "סיכום רישומים" + (nLogs ? ` (${nLogs})` : "");
+  const R = PLAYBOOK.rule, n = mainDone.length;   // the decision rule after the first calls in the main niche (playbook)
   const D = diaryData(), td = D.days[D.today] || {dials: 0, talked: 0};
-  $("#stats").innerHTML = stat("לידים", DATA.length) + stat("טופלו", touched) + stat("חיוגים היום", `${td.dials}` + (td.dials ? ` · דיברתי ${td.talked}` : "")) + stat("לחזור עכשיו", due, due > 0) + stat("נקבעו להמשך", D.later.length) + stat("נקבעו שיחות", booked) + stat("דמו", demos) + stat("סגרו", won) + stat("היכרות (ראשית)", mainDone.length + "/10") + stat("כאב 2–3", pain) + stat("קבעו דמו (ראשית)", demo);
-  const el = $("#rule"), n = mainDone.length; el.className = "rule";
-  if (n < 10) el.textContent = `כלל ההחלטה אחרי 10 שיחות היכרות בנישה הראשית: ממשיכים אם לפחות 6 עם כאב 2–3 וגם לפחות 3 קבעו דמו. עד עכשיו ${n} שיחות, ${pain} עם כאב, ${demo} קבעו דמו.`;
-  else if (pain >= 6 && demo >= 3){ el.classList.add("go"); el.textContent = `ממשיכים לנישה: ${pain} מתוך ${n} עם כאב 2–3, ו-${demo} קבעו דמו.`; }
-  else if (pain >= 4 && demo < 3){ el.classList.add("pivot"); el.textContent = `צריך לשנות זווית: יש כאב (${pain} מתוך ${n}) אבל רק ${demo} קבעו דמו.`; }
-  else if (pain < 4){ el.classList.add("side"); el.textContent = `לעבור לפיילוט הצדדי: רק ${pain} מתוך ${n} עם כאב 2–3.`; }
-  else el.textContent = `${pain} מתוך ${n} עם כאב, ${demo} קבעו דמו. תוצאה באמצע: להחליט עם פול.`;
+  $("#stats").innerHTML = stat("לידים", DATA.length) + stat("טופלו", touched) + stat("חיוגים היום", `${td.dials}` + (td.dials ? ` · דיברתי ${td.talked}` : "")) + stat("לחזור עכשיו", due, due > 0) + stat("נקבעו להמשך", D.later.length) + stat("נקבעו שיחות", booked) + stat("דמו", demos) + stat("סגרו", won) + stat("היכרות (ראשית)", (R ? n + "/" + R.calls : n)) + stat("כאב 2–3", pain) + stat("קבעו דמו (ראשית)", demo);
+  const el = $("#rule"); el.className = "rule"; el.hidden = !R; if (!R) return;
+  const v = {n, pain, demo, calls: R.calls, painMin: R.pain, demoMin: R.demo};
+  if (n < R.calls) el.textContent = tpl(R.before, v);
+  else if (pain >= R.pain && demo >= R.demo){ el.classList.add("go"); el.textContent = tpl(R.go, v); }
+  else if (pain >= R.pivotPain && demo < R.demo){ el.classList.add("pivot"); el.textContent = tpl(R.pivot, v); }
+  else if (pain < R.pivotPain){ el.classList.add("side"); el.textContent = tpl(R.side, v); }
+  else el.textContent = tpl(R.middle, v);
 }
 function renderList(){
   const items = filtered();
@@ -414,13 +417,13 @@ function knownHtml(l){
 }
 function editHtml(l){
   const r = rec(l.id), sm = r.summary || {}, P = PRICES[kindOf(l)];
-  const form = FORM.map(([k, label, type, opts]) => { const v = sm[k] ?? (k === "price" ? P.text : ""), mark = sv(l, "s:" + k);
+  const form = FORM.map(([k, label, type, opts]) => { const v = sm[k] ?? (k === "price" ? P.text || "" : ""), mark = sv(l, "s:" + k);
     if (type === "radio") return `<div class="f"><span>${label} ${mark}</span><span class="radios" role="radiogroup" aria-label="${label}">${opts.map((o, i) => `<label for="f-${k}-${i}"><input type="radio" id="f-${k}-${i}" name="f-${k}" value="${esc(o)}" ${v === o ? "checked" : ""}> ${esc(o)}</label>`).join("")}</span></div>`;
     if (type === "area") return `<label class="f" for="f-${k}">${label} ${mark}<textarea id="f-${k}" data-f="${k}">${esc(v)}</textarea></label>`;
     if (type === "datetime") return `<label class="f" for="f-${k}">${label} ${mark}<input type="datetime-local" id="f-${k}" data-f="${k}" value="${esc(v)}"></label>`;
     return `<label class="f" for="f-${k}">${label} ${mark}<input type="text" id="f-${k}" data-f="${k}" value="${esc(v)}"></label>`; }).join("");
   return `<div class="editarea">
-    <div class="price">${esc(P.text)} את המחיר אומרים רק בסוף, ורק אם עלה כאב ממשי.</div>
+    ${P.text || PLAYBOOK.priceTip ? `<div class="price">${esc([P.text, PLAYBOOK.priceTip].filter(Boolean).join(" "))}</div>` : ""}
     <div class="form">${form}</div>
     <label for="f-notes" class="note">הערות ${sv(l, "notes")}</label><textarea id="f-notes" placeholder="מה חשוב לזכור לשיחה הבאה">${esc(r.notes || "")}</textarea>
     <h4>מחשבון: כמה הוא מפסיד בחודש</h4>${calcHtml(l)}
@@ -663,14 +666,15 @@ function calcHtml(l){
     <label class="f">סוג העסק ${sv(l, "s:calc_type")}<select class="calc-in" data-k="calc_type"><option value="B" ${kind === "B" ? "selected" : ""}>ב׳: תיקון או קריאת שירות</option><option value="A" ${kind === "A" ? "selected" : ""}>א׳: פרויקט</option></select></label></div>
     <div class="calcout">${calcOut(l)}</div></div>`;
 }
+// The price lines, the comparison and the line to say come from the playbook; without it the calculator shows the loss alone.
 function calcOut(l){
-  const {m, d, c, ok, loss} = calcNums(l), kind = kindOf(l), P = PRICES[kind];
-  const price = kind === "B" ? `${withVat(P.monthly)} לחודש. בפיילוט: ${withVat(P.pilot)}` : `${withVat(P.monthly)} לחודש, מהחודש השני. ההקמה ${ils(P.setup)} פלוס מע"מ, כולל החודש הראשון`;
-  if (!ok) return `<div class="note">ממלאים את שלושת המספרים בזמן השיחה, והחשבון מופיע כאן. מחיר אלה: ${esc(price)}.</div>`;
-  const ratio = loss / (P.monthly * (1 + VAT));
+  const {m, d, c, ok, loss} = calcNums(l), kind = kindOf(l), P = PRICES[kind] || {}, C = PLAYBOOK.calc || {};
+  const price = P.monthly ? tpl(kind === "B" ? C.priceB : C.priceA, {monthly: withVat(P.monthly), pilot: P.pilot ? withVat(P.pilot) : "", setup: P.setup ? ils(P.setup) : ""}) : "";
+  if (!ok) return `<div class="note">ממלאים את שלושת המספרים בזמן השיחה, והחשבון מופיע כאן.${price ? ` מחיר אלה: ${esc(price)}.` : ""}</div>`;
+  const ratio = P.monthly ? loss / (P.monthly * (1 + VAT)) : 0;
   return `<div class="loss"><b>הוא מפסיד בערך ${ils(loss)} בחודש</b> <span class="note">(${m} שיחות בשבוע × ${WEEKS} שבועות × ${c}% סגירה × ${ils(d)})</span></div>
-    <div>מחיר אלה: ${esc(price)}. ${ratio >= 1 ? `ההפסד שלו גדול פי ${ratio.toFixed(1)} מהמחיר החודשי, כולל מע"מ.` : "ההפסד שלו קטן מהמחיר החודשי. לפי התסריט אומרים את זה ביושר: אצלו זה פחות בוער."}</div>
-    <div class="say">לשיחה: "אז גם אם רק ${c}% מהשיחות האלה היו הופכות לעבודה, זה ${ils(loss)} בחודש שהולכים למתחרה. נכון?"</div>`;
+    ${price ? `<div>מחיר אלה: ${esc(price)}. ${esc(tpl(ratio >= 1 ? C.high : C.low, {ratio: ratio.toFixed(1)}))}</div>` : ""}
+    ${C.say ? `<div class="say">${esc(tpl(C.say, {c, loss: ils(loss)}))}</div>` : ""}`;
 }
 function refreshCalc(l, except){
   const s = rec(l.id).summary || {};
@@ -1394,11 +1398,12 @@ $("#importFile").addEventListener("change", async e => {
   let bundle; try { bundle = JSON.parse(await f.text()); } catch { setSync("err", "הקובץ לא תקין"); return; }
   setSync("saving", "מייבא…");
   if (bundle.scripts){ const {error} = await sb.from("config").upsert({key: "scripts", value: bundle.scripts, updated_at: new Date().toISOString()}); if (error){ setSync("err", "ייבוא התסריטים נכשל"); return; } }
+  if (bundle.playbook){ const {error} = await sb.from("config").upsert({key: "playbook", value: bundle.playbook, updated_at: new Date().toISOString()}); if (error){ setSync("err", "ייבוא המחירים והשיטה נכשל"); return; } }
   const leads = (bundle.leads || []).map(l => ({id: String(l.id), data: l, updated_at: new Date().toISOString()}));
   for (let i = 0; i < leads.length; i += 100){ const {error} = await sb.from("leads").upsert(leads.slice(i, i + 100)); if (error){ setSync("err", "ייבוא הלידים נעצר: " + error.message); return; } setSync("saving", `מייבא לידים ${Math.min(i + 100, leads.length)}/${leads.length}…`); }
   const calls = Object.entries(bundle.calls || {}).map(([id, r]) => ({lead_id: id, rec: r, updated_at: new Date().toISOString(), updated_by: user.id}));
   for (let i = 0; i < calls.length; i += 100){ const {error} = await sb.from("calls").upsert(calls.slice(i, i + 100)); if (error){ setSync("err", "ייבוא הסימונים נעצר"); return; } }
-  setSync("ok", `יובאו ${leads.length} לידים ו-${calls.length} סימונים`);
+  setSync("ok", `יובאו ${leads.length} לידים ו-${calls.length} סימונים${bundle.playbook ? ", והמחירים והשיטה" : ""}`);
   const {data} = await sb.auth.getSession(); if (data.session) start(data.session);
 });
 

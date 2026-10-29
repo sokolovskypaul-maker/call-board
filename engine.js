@@ -69,43 +69,10 @@ function sayLines(lines, kind){
   return out;
 }
 const chunk = text => ({text, kt: keyToks(text).slice(0, 10)});
-// What the other side says → the objection blocks whose title holds the fragment. The title's own phrases count too.
-const OBJ_KW = [
-  ["לא מעוניין", ["לא מעוניין", "לא רלוונטי", "לא צריך את זה", "תוריד אותי"]],
-  ["עסוק", ["אני עסוק", "עסוק עכשיו", "באמצע עבודה", "לא יכול לדבר", "אני בנהיגה", "אני נוהג"]],
-  ["תחזור", ["תחזור אליי", "תחזור אלי", "תתקשר אחר כך", "תתקשר מאוחר יותר"]],
-  ["אחר כך", ["תתקשר אחר כך", "תחזור אחר כך", "דבר איתי אחר כך", "נדבר אחר כך", "תתקשר מאוחר יותר"]],
-  ["וואטסאפ", ["תשלח לי", "שלח לי", "בוואטסאפ", "תשלח הודעה", "תשלח פרטים"]],
-  ["כמה זה עולה", ["כמה זה עולה", "מה המחיר", "כמה עולה", "כמה זה יעלה", "מה העלות", "כמה זה יוצא"]],
-  ["מזכירה", ["יש לי מזכירה", "המזכירה עונה", "אשתי עונה", "מישהו עונה לי", "יש מי שעונה"]],
-  ["מוקד", ["יש לי מוקד", "מוקד מענה", "מוקד"]],
-  ["יקר", ["יקר", "הרבה כסף", "אין לי תקציב", "לא שווה את"]],
-  ["אין לי זמן", ["אין לי זמן", "אין זמן לזה", "אין לי כוח"]],
-  ["לחשוב", ["לחשוב על זה", "אני אחשוב", "צריך לחשוב"]],
-  ["להתייעץ", ["להתייעץ", "לדבר עם אשתי", "עם השותף", "השותף שלי", "לבדוק עם אשתי"]],
-  ["כבר יש לי", ["יש לי מערכת", "כבר יש לי", "יש לי בוט", "יש לי מענה", "מענה קולי", "כבר הציעו לי"]],
-  ["רובוט", ["רובוט", "בוט", "מכונה", "לא ידברו", "מי מבטיח", "לא יעבוד", "לא מדברים עם"]],
-  ["ניסיתי", ["ניסיתי", "כבר ניסינו", "לא עבד לי"]],
-  ["לא עכשיו", ["אחרי העונה", "לא עכשיו", "בעוד חודש", "אחרי החגים", "לא בתקופה הזאת"]],
-  ["אחרי העונה", ["אחרי העונה", "אחרי החגים"]],
-  ["פרטיות", ["פרטיות", "מקליטים", "הקלטות", "מקליט"]],
-  ["תטעה", ["תטעה", "טעות", "תתבלבל"]],
-  ["פייסבוק", ["פייסבוק", "תגובות", "מסנג'ר", "פרטים בפרטי"]],
-  ["קבוצות", ["קבוצות", "בקבוצה", "לסרוק"]],
-  ["מספיק עבודה", ["מספיק עבודה", "מלא עבודה", "אין לי צורך בעוד"]],
-  ["עונה לכל", ["עונה לכל", "אני תמיד עונה", "אני עונה לכולם"]],
-  ["בזול", ["בזול", "179", "יותר זול", "זול יותר"]],
-  ["סוכנות", ["סוכנות", "מביאים לי לידים", "קונה לידים"]],
-  ["עוקץ", ["עוקץ", "מי אתה בכלל", "נשמע חשוד"]],
-  ["טכנולוגי", ["לא טכנולוגי", "לא מבין במחשבים", "לא מבין בזה"]],
-  ["מאיפה", ["מאיפה יש לך", "איך השגת", "מאיפה המספר"]],
-  // the six niches (Ofek, 27.10): each has one objection of its own
-  ["תלוי בביקור", ["תלוי בביקור", "לא יכולה לתת מחיר", "בלי לראות את הדירה", "צריך לראות את הדירה"]],
-  ["רוצים לדבר איתי", ["רוצים לדבר איתי", "רוצים לדבר איתו", "רוצים אותי", "לדבר איתי ישירות"]],
-  ["אפליקציה", ["אפליקציה", "זימון תורים", "מערכת תורים"]],
-  ["מערכת הזמנות", ["מערכת הזמנות", "מוקדן", "סדרן", "מוקד הזמנות"]],
-  ["המלאי", ["המלאי משתנה", "המלאי מתחלף", "הרכבים מתחלפים", "משתנה כל יום"]],
-  ["מתווך", ["לדבר עם מתווך", "רוצים מתווך", "לדבר עם בן אדם"]]];
+// What the other side says → the objection blocks whose title holds the fragment ([fragment, [keywords]]). The title's own
+// phrases count too. The lists are the team's sales method, so they are not in this public code: configure() sets them
+// from the playbook, which the board reads from the database after login (config, key "playbook").
+let OBJ_KW = [];
 const GENERIC = new Set(["אחר כך", "מי זה", "מאוחר יותר", "עסוק"]);   // too common in any talk to count alone
 // Questions he asks are answered from the script too, but they are not "the main objection" in the summary.
 const QUESTION = /כמה זה עולה|וואטסאפ|מאיפה|מי זה|עוקץ/;
@@ -195,9 +162,10 @@ function said(c, heard){
   return hits >= (kt.length <= 2 ? kt.length : Math.max(3, Math.ceil(0.45 * kt.length)));
 }
 // A line Paul read from the script (most of a script line's key words in it). Such lines are not "the other side's words".
-const PAUL = /מדבר פול|שמי פול|פול מהמשרד|אם זה לא רלוונטי|אם זה לא בשבילך|אני בונה|מזכירה דיגיטלית|עוזרת דיגיטלית|קוראים לה אלה|אלה עונה|מזכירה AI/;
+// Phrases from Paul's own pitch (from the playbook): a line with one of them is his, not the other side's.
+let PAUL = null;
 function isPaul(text, model){
-  if (PAUL.test(norm(text))) return true;
+  if (PAUL && PAUL.test(norm(text))) return true;
   const kt = new Set(keyToks(text)); if (kt.size < 3) return false;
   for (const c of allChunks(model)){ if (c.kt.length < 3) continue; const hits = c.kt.filter(t => kt.has(t)).length; if (hits / c.kt.length >= 0.6 && hits >= 3) return true; }
   return false;
@@ -245,7 +213,7 @@ function numbersIn(t){
   return out.filter((n, k) => !(out[k + 1] && out[k + 1].i === n.end && out[k + 1].v > n.v && out[k + 1].v <= n.v * 3 + 2));
 }
 const near = (t, a, b, re) => t.slice(Math.max(0, a), Math.max(0, b)).some(w => re.test(w));
-const PRICE_WORDS = new Set([179, 490, 790, 1190, 1490, 2490, 2990]);   // our own prices, said by Paul: never his deal value
+let PRICE_WORDS = new Set();   // our own prices (from the playbook), said by Paul: never his deal value
 const RE = {
   calls: /^[והב]?ה?(שיחות|שיחה|פניות|פנייה|לקוחות|טלפונים|פעמים|צלצולים|לידים|הודעות)$/,
   week: /^[ולב]?(שבוע|לשבוע)$/, day: /^[ולב]?(יום)$/, month: /^[ולב]?(חודש)$/,
@@ -491,7 +459,14 @@ function extract({lines = [], model = null, kind = "B", objections = [], dur = 0
   return {summary: sm, calc, status, callback: ["demo", "callback"].includes(status) ? when : "", log, why, facts: f, words};
 }
 
-const Engine = {norm, keyToks, has, parseScript, nicheScript, nicheRe, sameNiche, said, isPaul, findObjection, isBye, facts, whenIn, resolveWhen, agreedWhen, extract, localISO, numbersIn, ntoks};
+// The playbook's engine part: {objKw: [[fragment, [keywords]]], priceWords: [numbers], paul: [phrases]}.
+function configure(p = {}){
+  OBJ_KW = Array.isArray(p.objKw) ? p.objKw : [];
+  PRICE_WORDS = new Set((p.priceWords || []).map(Number));
+  PAUL = (p.paul || []).length ? new RegExp(p.paul.map(x => reEsc(norm(x))).join("|")) : null;
+}
+
+const Engine = {configure, norm, keyToks, has, parseScript, nicheScript, nicheRe, sameNiche, said, isPaul, findObjection, isBye, facts, whenIn, resolveWhen, agreedWhen, extract, localISO, numbersIn, ntoks};
 root.Engine = Engine;
 if (typeof module !== "undefined" && module.exports) module.exports = Engine;
 })(typeof window !== "undefined" ? window : globalThis);
