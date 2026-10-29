@@ -149,6 +149,7 @@ header.top{padding-block:12px 10px;display:grid;gap:10px;border-bottom:1px solid
 .donecard .note{color:inherit;opacity:.85}
 .wa-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .btn.wabtn{background:#25d366;color:#08311a;border-color:transparent;font-weight:600;text-decoration:none}
+.btn.wabtn.fresh{box-shadow:0 0 0 3px color-mix(in srgb,#25d366 35%,transparent)}
 .wa-box{display:grid;gap:6px;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--sunk)}
 .wa-box textarea{min-height:110px}
 .sttline{font-size:13px;padding:6px 10px;border-radius:8px;background:var(--sunk);color:var(--muted)}
@@ -222,6 +223,26 @@ details.more summary{cursor:pointer;font-weight:600}
 .kv .k{font-size:11.5px;color:var(--muted);letter-spacing:.3px;margin-bottom:2px}
 section.box{margin-top:18px;padding-top:14px;border-top:1px solid var(--line);display:grid;gap:10px}
 section.box h3{font-size:15px;margin:0}
+/* the calls diary: booked calls as rows, and a small table per day */
+.dstats{margin-top:10px}
+.dlist{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.drow{display:grid;grid-template-columns:auto minmax(0,1fr) auto auto;gap:8px;align-items:center;padding:6px 10px;border:1px solid var(--line);border-radius:8px;background:var(--sunk)}
+.drow .dtime{font:600 13.5px var(--f-body);font-variant-numeric:tabular-nums;white-space:nowrap}
+.drow .dname{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+@media (max-width:520px){.drow{grid-template-columns:auto minmax(0,1fr) auto}.drow .dst{display:none}}
+.dtable{overflow-x:auto}
+.dtable table{border-collapse:collapse;min-width:320px;width:100%;font-size:13.5px}
+.dtable th,.dtable td{padding:5px 8px;border-bottom:1px solid var(--line);text-align:start}
+.dtable td{font-family:var(--f-num)}
+/* the pop-up tip during a call (tips.js): one sentence to say back, at the corner of the screen */
+.tippop{position:fixed;inset-inline-end:16px;bottom:calc(16px + env(safe-area-inset-bottom, 0px));z-index:50;width:min(380px,calc(100vw - 32px));display:grid;gap:6px;padding:10px 14px 12px;border-radius:12px;background:var(--panel);color:var(--ink);border:2px solid var(--plan-ink);box-shadow:0 10px 30px rgba(0,0,0,.2)}
+.tippop .tip-h{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:12.5px;font-weight:600;color:var(--plan-ink)}
+.tippop .tip-x{border:0;background:none;font-size:22px;line-height:1;cursor:pointer;color:var(--muted);padding:2px 8px;min-width:36px;min-height:32px}
+.tippop .tip-say{font:400 19px/1.4 var(--f-display);text-wrap:pretty}
+.tippop .tip-then{font-size:13.5px;color:var(--muted)}
+.tippop.pop{animation:tipin .22s ease-out}
+@keyframes tipin{from{opacity:0;transform:translateY(8px) scale(.98)}}
+@media (prefers-reduced-motion:reduce){.tippop.pop{animation:none}}
 .statuses{display:flex;gap:6px;flex-wrap:wrap}
 .statuses .btn[aria-pressed="true"]{background:var(--ink);color:var(--panel);border-color:var(--ink)}
 .form{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:12px}
@@ -292,6 +313,7 @@ details.script summary{cursor:pointer;font-weight:600}
         <select id="fScore" aria-label="ציון"><option value="0">כל הציונים</option><option value="5">ציון 5</option><option value="4">4 ומעלה</option><option value="3">3 ומעלה</option></select>
         <select id="fStatus" aria-label="סטטוס"><option value="">כל הסטטוסים</option></select>
         <select id="sort" aria-label="מיון"><option value="next">הבא בתור</option><option value="score">לפי ציון</option><option value="recent">עודכנו לאחרונה</option></select>
+        <button class="btn sm" id="callsDiary" type="button">יומן שיחות</button>
         <button class="btn sm" id="logsSummary" type="button">סיכום רישומים</button>
         <button class="btn sm" id="exportCsv" type="button">ייצוא יומן (CSV)</button>
         <label class="btn sm hidden" for="importFile" id="importLabel">ייבוא נתונים (מנהל)</label>
@@ -305,7 +327,8 @@ details.script summary{cursor:pointer;font-weight:600}
   </section>
 </div>
 
-<script src="engine.js?v=2026-10-28s"></script>
-<script src="app.js?v=2026-10-28s"></script>
+<script src="engine.js?v=2026-10-29t"></script>
+<script src="tips.js?v=2026-10-29t"></script>
+<script src="app.js?v=2026-10-29t"></script>
 </body>
 </html>

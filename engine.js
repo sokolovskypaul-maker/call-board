@@ -322,19 +322,27 @@ function timeAt(t, i){   // → {h, m, end} or null
   else if (t[j] === "בצהריים"){ part = "noon"; j++; }
   return {h, m, part, end: j};
 }
+// "שעה וחצי", "חצי שעה", "רבע שעה", "שעתיים", "10 דקות", "3 ימים", "שבוע" from token j on → {day, end} or null
+function spanAt(t, j){
+  const x = t[j] || "", y = t[j + 1] || "", half = y === "וחצי";
+  if (x === "שבוע") return {day: {rel: 7}, end: j + 1}; if (x === "שבועיים") return {day: {rel: 14}, end: j + 1}; if (x === "יומיים") return {day: {rel: 2}, end: j + 1};
+  if (x === "שעה") return {day: {mins: half ? 90 : 60}, end: j + (half ? 2 : 1)}; if (x === "שעתיים") return {day: {mins: half ? 150 : 120}, end: j + (half ? 2 : 1)};
+  if (x === "חצי" && y === "שעה") return {day: {mins: 30}, end: j + 2}; if (x === "רבע" && y === "שעה") return {day: {mins: 15}, end: j + 2};
+  const n = readNum(ntoks(x + " " + y), 0);
+  if (n && /^(דקות|דקה)$/.test(y)) return {day: {mins: n.v}, end: j + 2}; if (n && /^(שעות|שעה)$/.test(y)) return {day: {mins: n.v * 60}, end: j + 2};
+  if (n && /^(ימים|יום)$/.test(y)) return {day: {rel: n.v}, end: j + 2};
+  return null;
+}
 function dayAt(t, i){   // → {day: {rel} | {wd}, end} or null
   const w = t[i];
-  if (w === "היום") return {day: {rel: 0}, end: i + 1};
-  if (w === "הערב") return {day: {rel: 0, pm: true}, end: i + 1};
+  if (w === "היום" || w === "הערב"){
+    if (/^(כל|עד|של|לאורך)$/.test(t[i - 1] || "")) return null;   // "עונה לשיחות כל היום" is not a time
+    return {day: w === "הערב" ? {rel: 0, pm: true} : {rel: 0}, end: i + 1}; }
   if (w === "מחר" || w === "ומחר") return {day: {rel: 1}, end: i + 1};
   if (w === "מחרתיים") return {day: {rel: 2}, end: i + 1};
   if (/^ב?שבוע$/.test(w) && t[i + 1] === "הבא") return {day: {rel: 7}, end: i + 2};
-  if (w === "בעוד"){ const x = t[i + 1] || "", y = t[i + 2] || "";
-    if (x === "שבוע") return {day: {rel: 7}, end: i + 2}; if (x === "שבועיים") return {day: {rel: 14}, end: i + 2}; if (x === "יומיים") return {day: {rel: 2}, end: i + 2};
-    if (x === "שעה") return {day: {mins: 60}, end: i + 2}; if (x === "חצי" && y === "שעה") return {day: {mins: 30}, end: i + 3};
-    const n = readNum(ntoks(x + " " + y), 0);
-    if (n && /^(דקות|דקה)$/.test(y)) return {day: {mins: n.v}, end: i + 3}; if (n && /^(ימים|יום)$/.test(y)) return {day: {rel: n.v}, end: i + 3};
-    return null; }
+  if (/^(בעוד|עוד|תוך|ותוך|אחרי)$/.test(w)) return spanAt(t, i + 1);   // "עוד חצי שעה", "בעוד 10 דקות", "תוך שעה"
+  if (i === 0 && /^(חצי|רבע)$/.test(w) && t[1] === "שעה") return spanAt(t, 0);   // the whole answer: "חצי שעה, נסיים הובלה"
   const p = w.match(/^(?:ב|ה|וב)?(ראשון|שני|שלישי|רביעי|חמישי|שישי)$/);
   if (p && (w !== p[1] || /^ב?יום$/.test(t[i - 1] || ""))) return {day: {wd: WEEKDAYS[p[1]]}, end: i + 1};
   return null;

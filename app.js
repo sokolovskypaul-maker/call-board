@@ -46,6 +46,7 @@ const SCRIPT_NAMES = {discovery: "תסריט ההיכרות", sales: "תסריט
 
 // ---------- state ----------
 let DATA = [], SCRIPTS = {discovery: "", sales: ""}, user = null, isAdmin = false, selId = null, channel = null, readOnly = false;
+let TIPS = Tips.rules(null);   // the pop-up tips' rules and sentences (config "tips", see tips.js)
 const byId = {}, timers = new Map(), chains = new Map();
 const pendingKeys = new Map();   // lead id -> fields edited since the last save
 const inflight = new Map();      // lead id -> saves on their way to the server
@@ -133,6 +134,7 @@ async function start(session){
     sb.from("calls").select("lead_id,rec").limit(5000)]);
   if (cfg.error || leads.error || calls.error){ setSync("err", "הטעינה נכשלה. רענן את הדף"); return; }
   const scripts = (cfg.data || []).find(r => r.key === "scripts"); if (scripts) SCRIPTS = scripts.value; models.clear();
+  const tips = (cfg.data || []).find(r => r.key === "tips"); TIPS = Tips.rules(tips && tips.value);
   DATA = (leads.data || []).map(r => ({...r.data, id: r.id})).sort((a, b) => (a.order || 0) - (b.order || 0));
   for (const r of calls.data || []) byId[r.lead_id] = r.rec;
   buildFilters(); renderList();
@@ -159,7 +161,7 @@ function subscribe(){
     if (!DATA.some(l => l.id === row.lead_id)){ addLead(row.lead_id); return; }   // a lead that arrived after the board loaded (a voice demo)
     renderList();
     const typing = document.activeElement && $("#detail").contains(document.activeElement) && /INPUT|TEXTAREA/.test(document.activeElement.tagName);
-    if (summaryOpen) renderLogSummary();
+    if (summaryOpen) (diaryOpen ? renderDiary : renderLogSummary)();
     else if (row.lead_id === selId && !typing && !(live && live.listening)) renderDetail();
   }).subscribe(status => { if (status === "SUBSCRIBED") setSync("ok", "מסונכרן"); else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") setSync("err", "החיבור החי נפל. רענן את הדף"); });
 }
@@ -248,7 +250,8 @@ function renderStats(){
   const demos = recs.filter(([, r]) => r.status === "demo").length, won = recs.filter(([, r]) => r.status === "won").length;
   const stat = (k, v, alert) => `<div class="stat"><span>${k}</span><b class="${alert ? "alert" : ""}">${v}</b></div>`;
   const nLogs = DATA.reduce((a, l) => a + (rec(l.id).logs || []).length, 0), lsBtn = $("#logsSummary"); if (lsBtn) lsBtn.textContent = "סיכום רישומים" + (nLogs ? ` (${nLogs})` : "");
-  $("#stats").innerHTML = stat("לידים", DATA.length) + stat("טופלו", touched) + stat("לחזור עכשיו", due, due > 0) + stat("נקבעו שיחות", booked) + stat("דמו", demos) + stat("סגרו", won) + stat("היכרות (ראשית)", mainDone.length + "/10") + stat("כאב 2–3", pain) + stat("קבעו דמו (ראשית)", demo);
+  const D = diaryData(), td = D.days[D.today] || {dials: 0, talked: 0};
+  $("#stats").innerHTML = stat("לידים", DATA.length) + stat("טופלו", touched) + stat("חיוגים היום", `${td.dials}` + (td.dials ? ` · דיברתי ${td.talked}` : "")) + stat("לחזור עכשיו", due, due > 0) + stat("נקבעו להמשך", D.later.length) + stat("נקבעו שיחות", booked) + stat("דמו", demos) + stat("סגרו", won) + stat("היכרות (ראשית)", mainDone.length + "/10") + stat("כאב 2–3", pain) + stat("קבעו דמו (ראשית)", demo);
   const el = $("#rule"), n = mainDone.length; el.className = "rule";
   if (n < 10) el.textContent = `כלל ההחלטה אחרי 10 שיחות היכרות בנישה הראשית: ממשיכים אם לפחות 6 עם כאב 2–3 וגם לפחות 3 קבעו דמו. עד עכשיו ${n} שיחות, ${pain} עם כאב, ${demo} קבעו דמו.`;
   else if (pain >= 6 && demo >= 3){ el.classList.add("go"); el.textContent = `ממשיכים לנישה: ${pain} מתוך ${n} עם כאב 2–3, ו-${demo} קבעו דמו.`; }
@@ -358,19 +361,28 @@ function waNumber(l){
   for (const [p] of dialList(l)){ let d = String(p).replace(/\D/g, ""); if (d.startsWith("972")) d = d.slice(3); if (d.startsWith("0")) d = d.slice(1); if (/^5\d{8}$/.test(d)) return "972" + d; }
   return "";
 }
-function waMessage(l){
-  const p = WA_PAGES.find(([re]) => re.test(l.niche || "")), url = `${SITE}${p ? p[1] : ""}?utm_source=whatsapp&utm_medium=followup`;
-  const name = String((l.brief && l.brief.owner) || "").trim().split(/\s+/)[0] || shortName(l.name).replace(/\s*\(.*?\)/g, "").trim();
-  return `היי ${name}, כאן פול מהמשרד האחורי 🙂\nבהמשך לשיחה שלנו, היה נעים להכיר!\nכאן אפשר לראות איך זה עובד${p ? ` אצל ${p[2]}` : ""}:\n${url}\nאם יש שאלה, אני כאן. פול`;
+// The greeting's name: the owner's first name when the card has it, else the business name's first word when it reads as a
+// person's name ("שניר הובלות קטנות וגדולות" → "שניר"). A business word ("מוסך הכרמל") gives no name: "היי, כאן פול".
+const BIZ_WORD = /^[וה]?(מוסך|מוסכי|מספרת|מספרה|ברבר|ברברשופ|הובלות|הובלה|הובלת|תיווך|משרד|מוניות|מונית|תחנת|מגרש|מגרשי|רכב|חברת|חברה|נגריית|נגרייה|מנעולן|מנעולי|מנעולים|חשמלאי|חשמל|אינסטלציה|אינסטלטור|פרגולות|פרגולה|מטבחי|מטבחים|אלומיניום|חלונות|תריסי|תריסים|שיפוצי|שיפוצים|סטודיו|מרכז|קבוצת|בית|עולם|אחים|האחים|נדלן|רשת|שירותי|מכון|גלריית|אומן|מומחה|מומחי|טכנאי|קבלן|זרם|יבוא|עבודות)$/;
+function firstName(l){
+  const own = String((l.brief && l.brief.owner) || "").trim().split(/\s+/)[0]; if (own) return own;
+  const w = shortName(l.name).replace(/\s*\(.*?\)/g, "").trim().split(/\s+/)[0] || "";
+  return /^[א-ת]{2,}$/.test(w) && !BIZ_WORD.test(w) ? w : "";
 }
-const waLink = (num, text) => `https://wa.me/${num}?text=${encodeURIComponent(text)}`;
+// No emoji in the message: WhatsApp on the Mac shows the one that came through a wa.me link as a question mark.
+function waMessage(l){
+  const p = WA_PAGES.find(([re]) => re.test(l.niche || "")), url = `${SITE}${p ? p[1] : ""}?utm_source=whatsapp&utm_medium=followup`, name = firstName(l);
+  return `היי${name ? " " + name : ""}, כאן פול מהמשרד האחורי.\nבהמשך לשיחה שלנו, היה נעים להכיר!\nכאן אפשר לראות איך זה עובד${p ? ` אצל ${p[2]}` : ""}:\n${url}\nאם יש שאלה, אני כאן. פול`;
+}
+const noEmoji = s => String(s).replace(/[\p{Extended_Pictographic}\p{Emoji_Modifier}\p{Regional_Indicator}]|[\u200D\uFE0F\u20E3]/gu, "").replace(/[ \t]+$/gm, "").replace(/ {2,}/g, " ");
+const waLink = (num, text) => `https://wa.me/${num}?text=${encodeURIComponent(noEmoji(text))}`;
 function waHtml(l){
   const r = rec(l.id), num = waNumber(l), a = r.lastAuto, last = (r.wa || []).slice(-1)[0];
-  if (!num) return `<div class="wa-row"><button type="button" class="linkbtn" disabled>💬 וואטסאפ המשך</button><span class="note">${l.noDial ? "המספר לא לחיוג" : "אין מספר נייד, ולכן אין וואטסאפ"}</span></div>`;
+  if (!num) return `<div class="wa-row"><button type="button" class="btn sm" disabled>💬 וואטסאפ המשך</button><span class="note">${l.noDial ? "המספר לא לחיוג" : "אין מספר נייד, ולכן אין וואטסאפ"}</span></div>`;
   const fresh = a && !a.hidden && Date.now() - new Date(a.at).getTime() < 12 * 3600000 && !(last && last.at > a.at);   // right after a call it stands out
   const text = r.waDraft || waMessage(l), open = waOpen.has(l.id);
-  return `<div class="wa-row"><button type="button" class="${fresh ? "btn sm wabtn" : "linkbtn"}" id="waOpen" aria-expanded="${open}">💬 וואטסאפ המשך</button>${last ? `<span class="note">💬 נשלח קישור וואטסאפ · ${fmtDT(last.at)}</span>` : ""}</div>
-    ${open ? `<div class="wa-box"><label for="waText" class="note">ההודעה. אפשר לערוך לפני הפתיחה ${sv(l, "waDraft")}</label><textarea id="waText" rows="5">${esc(text)}</textarea>
+  return `<div class="wa-row"><button type="button" class="btn sm wabtn${fresh ? " fresh" : ""}" id="waOpen" aria-expanded="${open}">💬 וואטסאפ המשך</button>${last ? `<span class="note">💬 נשלח קישור וואטסאפ · ${fmtDT(last.at)}</span>` : ""}</div>
+    ${open ? `<div class="wa-box"><label for="waText" class="note">ההודעה. אפשר לערוך לפני הפתיחה. אימוג'י יורדים מההודעה, כי וואטסאפ במחשב מציג אותם כסימן שאלה ${sv(l, "waDraft")}</label><textarea id="waText" rows="5">${esc(text)}</textarea>
       <div class="inline"><a class="btn sm wabtn" id="waGo" href="${esc(waLink(num, text))}" target="_blank" rel="noopener noreferrer">פתח בוואטסאפ ←</a><span class="note">נפתח צ'אט עם ${esc(num.replace(/^972/, "0"))}. את השליחה עצמה עושים בוואטסאפ.</span></div></div>` : ""}`;
 }
 function doneCard(l){
@@ -429,7 +441,7 @@ function historyHtml(l){
   </div></details>`;
 }
 function renderDetail(){
-  const l = DATA.find(x => x.id === selId); if (!l) return; summaryOpen = false;
+  const l = DATA.find(x => x.id === selId); if (!l) return; summaryOpen = diaryOpen = false;
   const on = call && call.id === l.id;
   const dial = dialList(l).map(([p, lbl], i) => l.noDial
     ? `<span class="dialrow"><span class="call off" aria-disabled="true">${esc(p)}</span><span class="lbl">לא לחייג</span></span>`
@@ -468,7 +480,7 @@ const LOG_ROWS = [
   [["demoSent", "דמו: נשלח?", "radio", ["כן", "לא"]], ["demoHeard", "שמע על הקו?", "radio", ["כן", "לא"]], ["quote", "מה אמר עליה (ציטוט)", "text"]],
   [["nextAt", "הצעד הבא: יום ושעה", "datetime"], ["closed", "או: למה נסגר", "text"], ["change", "מה הייתי משנה בתסריט (משפט אחד)", "text"]]];
 const LOG_FIELDS = LOG_ROWS.flat();
-let summaryOpen = false;
+let summaryOpen = false, diaryOpen = false;   // a summary view (the logs summary or the calls diary) fills the card pane
 const editLog = {};   // lead id -> the log entry open in the editor (the latest one by default)
 function logDefaults(l){ const s = rec(l.id).summary || {}; return {kind: kindOf(l) === "B" ? "תיקונים" : "פרויקטים", missed: s.calc_missed || "", job: +s.calc_deal ? ils(+s.calc_deal) : ""}; }
 const draftLeft = r => r.logDraft && LOG_FIELDS.some(([k]) => String(r.logDraft[k] ?? "").trim());
@@ -503,7 +515,7 @@ function topCounts(items, n = 5){
   return [...m.values()].sort((a, b) => b.n - a.n).slice(0, n);
 }
 function renderLogSummary(){
-  summaryOpen = true;
+  summaryOpen = true; diaryOpen = false;
   const logs = DATA.flatMap(l => (rec(l.id).logs || []).map(x => ({...x, lead: l}))), n = logs.length;
   const cut = logs.filter(x => x.passed20 === "לא"), passed = logs.filter(x => x.passed20 === "כן");
   const heard = logs.filter(x => x.demoHeard === "כן"), notHeard = logs.filter(x => x.demoHeard !== "כן");
@@ -523,6 +535,66 @@ function renderLogSummary(){
     <section class="box"><h3>מה הייתי משנה בתסריט (האחרונים)</h3>${changes.length ? `<ul class="qs">${changes.map(x => `<li>${esc(x.change)} <span class="note">· ${esc(x.lead.name)}, ${fmtDT(x.at)}</span></li>`).join("")}</ul>` : `<div class="note">עוד אין הצעות.</div>`}</section>`;
 }
 $("#logsSummary")?.addEventListener("click", () => { renderLogSummary(); app.classList.add("showdetail"); $("#detail").scrollTop = 0; });
+
+// ---------- the calls diary: what is booked (today, later, passed) and how many dials and conversations a day ----------
+// A dial is a call started on the board (calls[]), or a status Paul marked by hand with no board call just before it.
+// A conversation is a dial that was answered: a board call of 20 seconds or more, or a mark other than "לא ענה" / "השארתי הודעה".
+// A booked time is the card's current one, or one an earlier call set (logs[].nextAt); it happened when a dial came after it.
+// "נקבעו" counts the times a call set (logs[].nextAt) and the bookings Paul marked by hand.
+const BOOKED = ["callback", "booked", "demo"];
+const dayKey = d => { d = new Date(d); return isNaN(d) ? "" : `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
+const hhmm = s => new Date(s).toLocaleTimeString("he-IL", {hour: "2-digit", minute: "2-digit"});
+function dialsOf(r){
+  const board = (r.calls || []).filter(c => c.at).map(c => {
+    const t = new Date(c.at).getTime(), after = (r.history || []).find(h => h.auto && Math.abs(new Date(h.t).getTime() - t) < 5 * 60000);
+    return {t, talked: (c.dur || 0) >= 20 && !(after && ["noanswer", "voicemail"].includes(after.s))}; });
+  const marks = (r.history || []).filter(h => h.t && h.s && h.s !== "new" && !h.auto && !h.wa && !h.note)
+    .map(h => ({t: new Date(h.t).getTime(), talked: !["noanswer", "voicemail"].includes(h.s), set: BOOKED.includes(h.s)}))
+    .filter(m => !board.some(b => m.t >= b.t - 60000 && m.t - b.t < 15 * 60000));   // a mark right after a board call belongs to it
+  return [...board, ...marks].filter(x => !isNaN(x.t));
+}
+function diaryData(){
+  const now = Date.now(), today = dayKey(now), days = {}, booked = [], noTime = [];
+  for (const l of DATA){ const r = rec(l.id), dials = dialsOf(r);
+    for (const x of dials){ const k = dayKey(x.t), d = days[k] = days[k] || {dials: 0, talked: 0, set: 0}; d.dials++; if (x.talked) d.talked++; if (x.set) d.set++; }
+    const times = new Map();
+    for (const g of r.logs || []) if (g.nextAt) times.set(g.nextAt, g.at);
+    if (BOOKED.includes(r.status) && r.callback) times.set(r.callback, times.get(r.callback) || "");
+    else if (BOOKED.includes(r.status)) noTime.push({l, r});
+    for (const [at, setAt] of times){ const t = new Date(at).getTime(); if (isNaN(t)) continue;
+      if (setAt){ const k = dayKey(setAt); (days[k] = days[k] || {dials: 0, talked: 0, set: 0}).set++; }
+      const live = BOOKED.includes(r.status) && r.callback === at;
+      const done = dials.some(x => x.t >= t - 30 * 60000 && x.t > new Date(setAt || 0).getTime() + 60000);
+      if (!live && !done) continue;   // an old time the card moved on from
+      booked.push({l, r, at, t, done}); }
+  }
+  booked.sort((a, b) => a.t - b.t);
+  return {now, today, days, noTime,
+    later: booked.filter(b => !b.done && b.t >= now), missed: booked.filter(b => !b.done && b.t < now), done: booked.filter(b => b.done).reverse()};
+}
+function renderDiary(){
+  summaryOpen = true; diaryOpen = true;
+  const D = diaryData(), td = D.days[D.today] || {dials: 0, talked: 0, set: 0};
+  const todayLater = D.later.filter(b => dayKey(b.t) === D.today), future = D.later.filter(b => dayKey(b.t) !== D.today);
+  const item = b => { const mins = Math.round((b.t - D.now) / 60000);
+    const when = dayKey(b.t) === D.today ? `היום ${hhmm(b.at)}` : fmtDT(b.at);
+    const soon = !b.done && mins >= 0 && mins <= 60 ? ` <span class="pill st-callback">בעוד ${mins} דק׳</span>` : !b.done && mins < 0 ? ` <span class="pill st-noanswer">עבר המועד</span>` : "";
+    return `<li class="drow"><b class="dtime">${esc(when)}</b><span class="dname">${esc(shortName(b.l.name))}${soon}</span><span class="pill dst st-${esc(b.r.status)}">${esc(SLABEL[b.r.status] || "")}</span><button type="button" class="btn sm" data-open="${esc(b.l.id)}">פתח</button></li>`; };
+  const list = (arr, empty) => arr.length ? `<ul class="dlist">${arr.map(item).join("")}</ul>` : `<div class="note">${empty}</div>`;
+  const rows = Object.entries(D.days).filter(([k]) => k).sort((a, b) => b[0].localeCompare(a[0])).slice(0, 14);
+  $("#detail").innerHTML = `
+    <button type="button" class="btn sm" id="summaryClose">→ חזרה</button>
+    <h2>יומן שיחות</h2>
+    <div class="stats dstats"><div class="stat"><span>חיוגים היום</span><b>${td.dials}</b></div><div class="stat"><span>דיברתי היום עם</span><b>${td.talked}</b></div><div class="stat"><span>נקבעו היום</span><b>${td.set}</b></div><div class="stat"><span>שיחות שנקבעו להמשך</span><b>${D.later.length}</b></div><div class="stat"><span>עבר המועד</span><b class="${D.missed.length ? "alert" : ""}">${D.missed.length}</b></div></div>
+    <section class="box"><h3>היום</h3>${list([...D.missed.filter(b => dayKey(b.t) === D.today), ...todayLater], "אין שיחות שנקבעו להיום.")}</section>
+    <section class="box"><h3>נקבעו לעתיד</h3>${list(future, "אין שיחות שנקבעו לימים הבאים.")}</section>
+    ${D.missed.some(b => dayKey(b.t) !== D.today) ? `<section class="box"><h3>עבר המועד ועוד לא התקשרת</h3>${list(D.missed.filter(b => dayKey(b.t) !== D.today), "")}</section>` : ""}
+    ${D.noTime.length ? `<section class="box"><h3>נקבעו בלי שעה</h3><div class="note">הסטטוס אומר שנקבעה שיחה, אבל אין מועד בכרטיס.</div><ul class="dlist">${D.noTime.map(({l, r}) => `<li class="drow"><b class="dtime">—</b><span class="dname">${esc(shortName(l.name))}</span><span class="pill dst st-${esc(r.status)}">${esc(SLABEL[r.status] || "")}</span><button type="button" class="btn sm" data-open="${esc(l.id)}">פתח</button></li>`).join("")}</ul></section>` : ""}
+    <section class="box"><h3>נקבעו והתקיימו</h3>${list(D.done.slice(0, 20), "עוד אין שיחה שנקבעה והתקיימה.")}</section>
+    <section class="box"><h3>לפי יום</h3>${rows.length ? `<div class="dtable"><table><thead><tr><th>יום</th><th>חיוגים</th><th>דיברתי עם</th><th>נקבעו שיחות</th></tr></thead><tbody>${rows.map(([k, d]) => `<tr><td>${esc(new Date(k + "T12:00").toLocaleDateString("he-IL", {weekday: "short", day: "2-digit", month: "2-digit"}))}</td><td>${d.dials}</td><td>${d.talked}</td><td>${d.set}</td></tr>`).join("")}</tbody></table></div>` : `<div class="note">עוד אין חיוגים רשומים.</div>`}
+      <div class="note">חיוג הוא שיחה שהתחלת מהלוח, או סטטוס שסימנת ביד. "דיברתי עם" הוא כל חיוג שענו בו.</div></section>`;
+}
+$("#callsDiary")?.addEventListener("click", () => { renderDiary(); app.classList.add("showdetail"); $("#detail").scrollTop = 0; });
 
 // ---------- calculator: missed calls a week × average job × close rate = what he loses a month ----------
 // The same inputs appear in the card and inside each script; all copies stay in step and save to the lead's summary.
@@ -565,7 +637,9 @@ $("#detail").addEventListener("click", async e => {
   const stt = t.closest("[data-stt]");
   if (stt && selId && !stt.disabled){ transcribeRecording(selId, stt); return; }
   const mac = t.closest("[data-mac]"); if (mac && selId && !mac.disabled){ transcribeOnMac(selId, mac.dataset.mac, mac); return; }
-  if (t.closest("#summaryClose")){ summaryOpen = false; if (selId) renderDetail(); else $("#detail").innerHTML = EMPTY_DETAIL; app.classList.toggle("showdetail", !!selId); return; }
+  const dop = t.closest("[data-open]");
+  if (dop && DATA.some(l => l.id === dop.dataset.open)){ summaryOpen = diaryOpen = false; selId = dop.dataset.open; renderList(); renderDetail(); $("#detail").scrollTop = 0; return; }
+  if (t.closest("#summaryClose")){ summaryOpen = diaryOpen = false; if (selId) renderDetail(); else $("#detail").innerHTML = EMPTY_DETAIL; app.classList.toggle("showdetail", !!selId); return; }
   if (t.closest("#callGoto") && call){ selId = call.id; renderList(); renderDetail(); return; }
   const tf = t.closest("[data-trfill]");
   if (tf && trCache[tf.dataset.trfill] && selId){ fillFromTranscript(selId, tf.dataset.trfill); return; }
@@ -658,7 +732,7 @@ function endCall(){
   const c = call; if (!c) return; stopListening(); const chP = stopChunks(c), recP = stopRecording(c);
   if (live && live.interim){ live.lines.push({t: Date.now(), text: live.interim}); live.interim = ""; }
   const lines = live ? live.lines : [], srOk = !!(live && live.srOk && (lines.length || !live.srErr));
-  c.end = Date.now(); clearInterval(c.timer); clearTimeout(c.trTimer); call = null; live = null;
+  c.end = Date.now(); clearInterval(c.timer); clearTimeout(c.trTimer); call = null; live = null; renderTip(false);
   const keep = (lines.length > 0 || !!c.chunks) && !readOnly;
   const entry = {at: new Date(c.end).toISOString(), dur: Math.round((c.end - c.start) / 1000), stages: stageLabels(c), objections: [...c.objections], ...(keep ? {tr: c.trId} : {})};
   const d = keep ? trDoc(c, lines, "final") : null; if (d) trCache[c.trId] = d;
@@ -754,7 +828,40 @@ function heardSpeech(fin, interim){
   hearObjection(c, fin); hearObjection(c, interim);
   follow(c, fin, interim);
   if (fin) c.facts = Engine.facts(live.lines.map(x => x.text).join(" . "));
+  if (fin) offerTip(c, fin);
   renderCockpit();
+}
+// ---------- the pop-up tip: a sentence to say back to what he just said ----------
+// The big box follows the script and answers objections; the tip (tips.js) answers the rest: a question, a detail about his
+// business, interest, and the numbers he gave turned into the sum. It sits at the corner for half a minute or until the next one.
+const TIP_MS = 30000;
+let tipTimer = null;
+function offerTip(c, text){
+  if (!TIPS.list.length && !TIPS.facts.both) return;
+  if (Engine.isPaul(text, c.model)) return;
+  if (c.view.obj && Date.now() - c.view.obj.at < 3000) return;   // an objection just took the big box: its answer is there
+  const l = DATA.find(x => x.id === c.id); if (!l) return;
+  c.tipShown = c.tipShown || {}; const st = c.model && c.model.steps[c.view.s];
+  const t = Tips.pick(TIPS, text, {shown: c.tipShown, step: st ? st.label : "", facts: c.facts, factsSeen: c.tipFacts || "", kind: kindOf(l)});
+  if (!t) return;
+  if (t.key != null) c.tipFacts = t.key; else c.tipShown[t.id] = Date.now();
+  c.tip = {...t, at: Date.now()}; renderTip(true);
+}
+function renderTip(fresh){
+  let el = $("#tipPop"); const c = call, t = c && c.tip;
+  clearTimeout(tipTimer);
+  if (!t || c.id !== selId || Date.now() - t.at >= TIP_MS){ if (el) el.hidden = true; return; }
+  if (!el){
+    el = document.createElement("div"); el.id = "tipPop"; el.className = "tippop"; el.setAttribute("role", "status"); el.setAttribute("aria-live", "polite");
+    el.addEventListener("click", e => { if (!e.target.closest("#tipClose")) return; if (call) call.tip = null; el.hidden = true; });
+    document.body.appendChild(el);
+  }
+  const l = DATA.find(x => x.id === c.id);
+  el.innerHTML = `<div class="tip-h"><span>💡 אפשר להגיד${t.kw ? ` · שמעתי "${esc(t.kw)}"` : ""}</span><button type="button" class="tip-x" id="tipClose" aria-label="סגירת ההצעה">×</button></div>
+    <div class="tip-say">${esc(fillIn(t.say, l))}</div>${t.then ? `<div class="tip-then">ואז: ${esc(fillIn(t.then, l))}</div>` : ""}`;
+  el.hidden = false;
+  if (fresh){ el.classList.remove("pop"); void el.offsetWidth; el.classList.add("pop"); }
+  tipTimer = setTimeout(() => renderTip(false), TIP_MS - (Date.now() - t.at) + 50);
 }
 function renderCockpit(){
   const c = call, box = $("#sayBox"); if (!c || !box || c.id !== selId || !c.model) return;
