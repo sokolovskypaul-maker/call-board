@@ -725,7 +725,6 @@ function tick(){
   const c = call; if (!c) return;
   const el = $("#callTime"); if (el) el.textContent = fmt(Date.now() - c.start);
   if (c.endAt){ if (Date.now() >= c.endAt){ endCall(); return; } renderEndBanner(); }
-  else watchEnd(c);
 }
 const stageLabels = c => [...(c.done || [])].sort((a, b) => a - b).map(i => c.model && c.model.steps[i] && c.model.steps[i].label).filter(Boolean);
 function endCall(){
@@ -751,18 +750,10 @@ function endCall(){
   renderDetail(); document.getElementById("knownBox")?.scrollIntoView({behavior: "smooth", block: "start"});
 }
 
-// ---------- the end of a call, noticed by itself ----------
-// "ביי" (or "יום טוב", "להתראות"…) followed by a few seconds of quiet, the phone's hang-up beeps after the talk, or 45 quiet
-// seconds after the talk start a 3-second countdown on screen. Any new talk, or "השיחה ממשיכה", stops it.
-function watchEnd(c){
-  if (!live || !live.listening || (c.autoOffUntil || 0) > Date.now()) return;
-  const now = Date.now(), quiet = now - (live.lastSpeechAt || now), spoke = live.lines.length >= 2;
-  let why = "";
-  if (live.byeAt && quiet >= 3000 && now - live.byeAt >= 2500) why = "שמעתי \"ביי\" ואחריו שקט";
-  else if (spoke && live.toneAt && now - live.toneAt < 4000 && quiet >= 1500 && now - c.start > 30000) why = "שמעתי צליל של ניתוק";
-  else if (spoke && live.lastSpeechAt && quiet >= 45000) why = "שקט כבר 45 שניות";
-  if (why){ c.endAt = now + 3000; c.endWhy = why; renderEndBanner(); }
-}
+// ---------- the end of a call ----------
+// A call ends only when Paul presses "סיים שיחה". Until 29.10 the board ended it by itself ("ביי" and quiet, a hang-up tone,
+// or 45 quiet seconds), and it cut a good call with מפה לשם הובלות in the middle: the other side was talking, but Chrome's
+// recognition did not hear him, so it looked like quiet. The recording and the listening go on until Paul ends the call.
 function cancelEnd(c, byHand){
   c.endAt = 0;
   if (byHand){ c.autoOffUntil = Date.now() + 30000; if (live){ live.byeAt = 0; live.toneAt = 0; } }
