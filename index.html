@@ -282,6 +282,8 @@ section.box h3{font-size:15px;margin:0}
 .dtable table{border-collapse:collapse;min-width:320px;width:100%;font-size:13.5px}
 .dtable th,.dtable td{padding:5px 8px;border-bottom:1px solid var(--line);text-align:start}
 .dtable td{font-family:var(--f-num)}
+/* the other side's lines, heard by the transcriber on the Mac during the call */
+.transcript div.mac{color:var(--plan-ink)}
 /* the pop-up tip during a call (tips.js): one sentence to say back, at the corner of the screen */
 .tippop{position:fixed;inset-inline-end:16px;bottom:calc(16px + env(safe-area-inset-bottom, 0px));z-index:50;width:min(380px,calc(100vw - 32px));display:grid;gap:6px;padding:10px 14px 12px;border-radius:12px;background:var(--panel);color:var(--ink);border:2px solid var(--plan-ink);box-shadow:0 10px 30px rgba(0,0,0,.2)}
 .tippop .tip-h{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:12.5px;font-weight:600;color:var(--plan-ink)}
@@ -383,8 +385,8 @@ details.script summary{cursor:pointer;font-weight:600}
 </div>
 
 <dialog id="mfaDialog" class="mfa-dialog" aria-labelledby="mfaTitle"><div class="mfa-head"><h2 id="mfaTitle">קוד מהטלפון בכניסה</h2><button type="button" class="btn sm" id="mfaClose">סגירה</button></div><div id="mfaBody"></div></dialog>
-<script src="engine.js?v=2026-10-30a"></script>
-<script src="tips.js?v=2026-10-30a"></script>
-<script src="app.js?v=2026-10-30a"></script>
+<script src="engine.js?v=2026-10-30b"></script>
+<script src="tips.js?v=2026-10-30b"></script>
+<script src="app.js?v=2026-10-30b"></script>
 </body>
 </html>

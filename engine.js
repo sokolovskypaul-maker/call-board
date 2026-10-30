@@ -202,6 +202,8 @@ function readNum(t, i){
     if (and && w === "חצי"){ if (cur) cur += 0.5; else total += total ? 500 : 0; j++; break; }
     const v = UNITS[w] ?? TENS[w];
     if (v != null && (and || ((w === "עשר" || w === "עשרה") && cur > 0 && cur < 10))){ cur += v; continue; }
+    // after a thousand, the hundreds go on without "ו": "אלף חמש מאות" is 1,500, "אלף מאתיים" 1,200 ("אלף, חמש שיחות" stays two numbers)
+    if (total && !cur && (w === "מאה" || w === "מאתיים" || (UNITS[w] != null && t[j + 1] === "מאות"))){ cur = v; continue; }
     break;
   }
   return {v: total + cur, i, end: j};

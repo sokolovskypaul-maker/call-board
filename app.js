@@ -862,7 +862,7 @@ function tick(){
 }
 const stageLabels = c => [...(c.done || [])].sort((a, b) => a - b).map(i => c.model && c.model.steps[i] && c.model.steps[i].label).filter(Boolean);
 function endCall(){
-  const c = call; if (!c) return; stopListening(); const chP = stopChunks(c), recP = stopRecording(c);
+  const c = call; if (!c) return; stopListening(); stopMacEar(c); const chP = stopChunks(c), recP = stopRecording(c);
   if (live && live.interim){ live.lines.push({t: Date.now(), text: live.interim}); live.interim = ""; }
   const lines = live ? live.lines : [], srOk = !!(live && live.srOk && (lines.length || !live.srErr));
   c.end = Date.now(); clearInterval(c.timer); clearTimeout(c.trTimer); call = null; live = null; renderTip(false);
@@ -971,6 +971,65 @@ function offerTip(c, text){
   if (!t) return;
   if (t.key != null) c.tipFacts = t.key; else c.tipShown[t.id] = Date.now();
   c.tip = {...t, at: Date.now()}; renderTip(true);
+}
+// ---------- hearing the other side during the call, through the transcriber on the Mac ----------
+// Chrome's recognition cleans the sound for one voice, so it hears Paul well and the iPhone's speaker hardly at all. The
+// recording takes the microphone as it is and hears both. So while a call is recorded, every 8 seconds of it go to the Mac's
+// fast model (?fast=1) as a file of its own. A line Chrome did not hear is the other side's: it goes to the objections and to
+// the pop-up tip, as Chrome's lines do. A quiet stretch is not sent; while one piece is out, the newest waits (an older waiting
+// one is dropped); a piece back more than 25 seconds late is kept for the numbers but makes no tip. It starts only when the
+// transcriber answers and offers the fast model, and the whole recording still gets the accurate model at the end.
+const MAC_PIECE_MS = 8000, MAC_LATE_MS = 25000;
+async function startMacEar(c){
+  if (!c || !c.recording || readOnly || call !== c || c.macEar) return;
+  let ok = false; try { const r = await fetch(LOCAL_STT + "/health", {signal: AbortSignal.timeout(1500)}); ok = r.ok && !!(await r.json()).fast; } catch {}
+  if (!ok || call !== c || !c.recording || c.macEar) return;
+  const r = c.recording, ear = c.macEar = {stopped: false, busy: false, wait: null, lines: [], peak: 1};
+  try {   // a level meter, so a quiet stretch is not sent
+    const ac = new AudioContext(), an = ac.createAnalyser(), buf = new Float32Array(1024); an.fftSize = 1024;
+    ac.createMediaStreamSource(r.stream).connect(an); ac.resume().catch(() => {}); ear.ac = ac; ear.peak = 0;
+    ear.meter = setInterval(() => { if (ac.state !== "running"){ ear.peak = 1; return; }   // a meter Chrome would not start must not silence the ear
+      an.getFloatTimeDomainData(buf); let sum = 0; for (const v of buf) sum += v * v; ear.peak = Math.max(ear.peak, Math.sqrt(sum / buf.length)); }, 250);
+  } catch {}
+  const next = () => {
+    if (call !== c || ear.stopped || !c.recording) return;
+    const parts = [], t0 = Date.now(), mr = new MediaRecorder(r.stream, {mimeType: r.mime, audioBitsPerSecond: 32000});
+    mr.ondataavailable = e => { if (e.data && e.data.size) parts.push(e.data); };
+    mr.onstop = () => { const loud = ear.peak; ear.peak = ear.ac ? 0 : 1; if (!ear.stopped) next();
+      const blob = new Blob(parts, {type: r.mime});   // a piece of a few hundred bytes is only the file's header: nothing was heard
+      if (blob.size > 1500 && loud >= QUIET_RMS) hearPiece(c, ear, {blob, t0, t1: Date.now()}); };
+    ear.mr = mr; mr.start(); ear.timer = setTimeout(() => { try { mr.stop(); } catch {} }, MAC_PIECE_MS);
+  };
+  next(); renderRecBadge();
+}
+function stopMacEar(c){
+  const ear = c && c.macEar; if (!ear || ear.stopped) return;
+  ear.stopped = true; ear.wait = null; clearTimeout(ear.timer); clearInterval(ear.meter);
+  try { if (ear.mr && ear.mr.state !== "inactive") ear.mr.stop(); } catch {}
+  try { ear.ac && ear.ac.close(); } catch {}
+}
+// Words Chrome heard too, in the same stretch of the call, are Paul's own (Chrome hears him and hardly anyone else).
+function chromeHeard(text, t){
+  const kt = Engine.keyToks(text); if (kt.length < 2) return true;   // "כן", "בטח": nothing to answer
+  const near = new Set((live ? live.lines : []).filter(x => x.t >= t - 20000 && x.t <= t + 15000).flatMap(x => Engine.keyToks(x.text)));
+  return kt.filter(w => near.has(w)).length / kt.length >= 0.5;
+}
+async function hearPiece(c, ear, p){
+  if (ear.busy){ if (!ear.stopped) ear.wait = p; return; }
+  ear.busy = true;
+  const res = await sttPost(p.blob, p.blob.type || "audio/webm", "?fast=1");
+  ear.busy = false;
+  if (res.lines && res.lines.length && call === c){
+    const fresh = Date.now() - p.t1 <= MAC_LATE_MS, theirs = [];
+    for (const ln of res.lines){ const text = String(ln.x || "").trim(); if (!text) continue;
+      const x = {t: p.t0 + (ln.s || 0) * 1000, text, other: false}; x.other = !chromeHeard(text, x.t); ear.lines.push(x); if (x.other) theirs.push(x); }
+    if (theirs.length){
+      c.facts = Engine.facts([...(live ? live.lines : []), ...ear.lines.filter(x => x.other)].sort((a, b) => a.t - b.t).map(x => x.text).join(" . "));
+      if (fresh) for (const x of theirs){ hearObjection(c, x.text); offerTip(c, x.text); }
+      renderTranscript(); renderCockpit();
+    }
+  }
+  const w = ear.wait; ear.wait = null; if (w && !ear.stopped && call === c) hearPiece(c, ear, w);
 }
 function renderTip(fresh){
   let el = $("#tipPop"); const c = call, t = c && c.tip;
@@ -1115,9 +1174,9 @@ const sttState = new Map();   // lead id -> {state: "running" | "off" | "done" |
 const STT_ERR = {too_big: "ההקלטה גדולה מדי לתמלול", decode_failed: "קובץ ההקלטה לא נקרא", fetch_failed: "הקישור להקלטה פג. נסה שוב",
   timeout: "התמלול לקח יותר מדי זמן", offline: "המתמלל במק הפסיק לענות", saved: "התמלול לא נשמר בשרת. הוא נמצא ב\"עריכה\", בתיבה \"מה היה בשיחה\""};
 async function sttAlive(){ try { const r = await fetch(LOCAL_STT + "/health", {signal: AbortSignal.timeout(1500)}); return r.ok && !!(await r.json()).ok; } catch { return false; } }
-async function sttPost(body, type){
+async function sttPost(body, type, query = ""){
   try {
-    const r = await fetch(LOCAL_STT + "/transcribe", {method: "POST", body, headers: {"Content-Type": type}, signal: AbortSignal.timeout(20 * 60000)});
+    const r = await fetch(LOCAL_STT + "/transcribe" + query, {method: "POST", body, headers: {"Content-Type": type}, signal: AbortSignal.timeout(20 * 60000)});
     const j = await r.json().catch(() => ({})); return r.ok ? j : {error: j.error || "http_" + r.status};
   } catch (e){ return {error: e && e.name === "TimeoutError" ? "timeout" : "offline"}; }
 }
@@ -1184,7 +1243,7 @@ addEventListener("pagehide", () => stopListening());   // never leave the microp
 // If the upload fails, the file is downloaded to this computer instead, so a recording is never lost.
 const REC_TEXT = {starting: "מתחיל להקליט…", on: "● מקליט · לומר לצד השני שהשיחה מוקלטת", denied: "ההקלטה לא פועלת: Chrome לא קיבל גישה למיקרופון", unsupported: "הדפדפן הזה לא מקליט. פותחים ב-Chrome"};
 const recWarn = {};   // lead id -> why the last recording is on this computer and not on the server
-const recBadgeText = () => call ? (REC_TEXT[call.recording ? "on" : call.recState] || "") : "";
+const recBadgeText = () => call ? (REC_TEXT[call.recording ? "on" : call.recState] || "") + (call.recording && call.macEar && !call.macEar.stopped ? " · 🎧 המק שומע גם את הצד השני" : "") : "";
 function renderRecBadge(){ const b = $("#recBadge"); if (b && call){ b.textContent = recBadgeText(); b.classList.toggle("on", !!call.recording); } }
 async function startRecording(c){
   if (!c) return;
@@ -1199,7 +1258,7 @@ async function startRecording(c){
   const chunks = []; mr.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
   mr.start(1000);
   c.recording = {mr, stream, chunks, mime: mr.mimeType || mime || "audio/webm"}; c.recState = "on"; renderRecBadge();
-  startMeter(c, stream); startChunks(c);
+  startMeter(c, stream); startChunks(c); startMacEar(c);
 }
 function stopRecording(c){
   stopMeter(c); const r = c && c.recording; if (!r) return Promise.resolve(null);
@@ -1331,7 +1390,8 @@ function startListening(){
 }
 function stopListening(){ if (!live) return; live.listening = false; try { live.rec && live.rec.stop(); } catch {} }
 function renderTranscript(){ const box = $("#liveTranscript"); if (!box || !live) return;
-  box.innerHTML = live.lines.slice(-40).map(x => `<div><span class="ts">${fmt(x.t - (call ? call.start : x.t))}</span>${esc(x.text)}</div>`).join("") + (live.interim ? `<div class="interim">${esc(live.interim)}</div>` : "");
+  const mac = call && call.macEar ? call.macEar.lines.filter(x => x.other).map(x => ({...x, mac: true})) : [];
+  box.innerHTML = [...live.lines, ...mac].sort((a, b) => a.t - b.t).slice(-40).map(x => `<div${x.mac ? ` class="mac"` : ""}><span class="ts">${fmt(x.t - (call ? call.start : x.t))}</span>${x.mac ? "🎧 " : ""}${esc(x.text)}</div>`).join("") + (live.interim ? `<div class="interim">${esc(live.interim)}</div>` : "");
   box.scrollTop = box.scrollHeight; }
 
 // ---------- "what to say now" and accurate transcripts (server functions "live" and "transcribe") ----------
