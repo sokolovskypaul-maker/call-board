@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Hebrew:wght@400;500;600;700&family=Suez+One&family=IBM+Plex+Mono:wght@500;600&display=swap">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/dist/umd/supabase.js" integrity="sha384-BWcjm9OdFth9TbhCxZPdm+gAOUMAzQy9nmTs12ioXdCcbVnJaPMn+fMUoQCLt60R" crossorigin="anonymous"></script>
-<script src="config.js?v=2026-10-29z"></script>
+<script src="config.js?v=2026-10-30a"></script>
 <style>
 /* Layout: a two-pane call sheet. The call queue sits on the start side, the open lead's call card beside it; the live call panel sits at the top of the card. One column on phones. */
 :root{
@@ -41,6 +41,11 @@ button,input,select,textarea{font:inherit;color:inherit}
 :focus-visible{outline:2px solid var(--focus);outline-offset:2px}
 .app{padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:env(safe-area-inset-top,0px) 24px;max-width:1440px;margin:0 auto}
 .hidden,[hidden]{display:none!important}
+/* view only (body.ro): what would only fail for a viewer is not shown */
+.ro-badge{font-size:12px;font-weight:600;padding:3px 10px;border-radius:999px;border:1px solid var(--line);background:var(--sunk);color:var(--ink);white-space:nowrap}
+body.ro #callStart,body.ro #callManual,body.ro #callEnd,body.ro #endBanner,body.ro #listenToggle,body.ro #editToggle,body.ro #fillFromText,body.ro #fillMsg,
+body.ro #logNew,body.ro #logDraftSave,body.ro #autoUndo,body.ro #autoHide,body.ro .wa-row,body.ro .recrow,body.ro [data-play],body.ro [data-dl],
+body.ro [data-stt],body.ro [data-mac],body.ro [data-trfill],body.ro #importLabel{display:none!important}
 .mfa-dialog{border:1px solid var(--line);border-radius:14px;background:var(--panel);color:var(--ink);padding:16px 18px;max-width:min(440px,calc(100vw - 32px))}
 .mfa-dialog::backdrop{background:rgba(0,0,0,.45)}
 .mfa-head{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:8px}
@@ -350,7 +355,7 @@ details.script summary{cursor:pointer;font-weight:600}
         <h1>חמ״ל</h1>
         <nav class="views" aria-label="מסכים"><button type="button" data-view="home">בית</button><button type="button" data-view="leads">לידים</button><button type="button" data-view="diary">יומן שיחות</button><button type="button" data-view="logs">סיכום רישומים</button></nav>
         <span class="sync" id="sync"><span class="dot"></span><span id="syncText">מתחבר…</span></span>
-        <span class="who" id="whoami"></span>
+        <span class="who" id="whoami"></span><span class="ro-badge hidden" id="roBadge" title="אפשר לקרוא הכול. שום דבר לא משתנה מכאן">צפייה בלבד</span>
         <button type="button" class="btn sm" id="mfaBtn" title="קוד מהטלפון בכניסה" aria-label="קוד מהטלפון בכניסה">🔐</button><button type="button" class="btn sm" id="logout">יציאה</button>
         <div class="stats" id="stats"></div>
       </div>
@@ -378,8 +383,8 @@ details.script summary{cursor:pointer;font-weight:600}
 </div>
 
 <dialog id="mfaDialog" class="mfa-dialog" aria-labelledby="mfaTitle"><div class="mfa-head"><h2 id="mfaTitle">קוד מהטלפון בכניסה</h2><button type="button" class="btn sm" id="mfaClose">סגירה</button></div><div id="mfaBody"></div></dialog>
-<script src="engine.js?v=2026-10-29z"></script>
-<script src="tips.js?v=2026-10-29z"></script>
-<script src="app.js?v=2026-10-29z"></script>
+<script src="engine.js?v=2026-10-30a"></script>
+<script src="tips.js?v=2026-10-30a"></script>
+<script src="app.js?v=2026-10-30a"></script>
 </body>
 </html>

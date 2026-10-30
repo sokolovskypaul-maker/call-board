@@ -175,6 +175,18 @@ $("#mfaBtn").addEventListener("click", async () => {
   });
 });
 
+// ---------- view only ----------
+// Every render of the card passes through here: a viewer's text fields turn read-only and his choices disabled.
+// Choosing which log to read stays open. The buttons are hidden by CSS (body.ro).
+function lockDetail(){
+  if (!readOnly) return;
+  for (const el of $("#detail").querySelectorAll("input, textarea, select")){
+    if (el.id === "logPick") continue;
+    if (el.tagName === "SELECT" || el.type === "checkbox" || el.type === "radio") el.disabled = true; else el.readOnly = true;
+  }
+}
+new MutationObserver(lockDetail).observe($("#detail"), {childList: true, subtree: true});
+
 // ---------- data ----------
 async function start(session){
   if (await needsMfa()){ showMfa(start); return; }   // a code from the phone is on: nothing loads before it
@@ -182,6 +194,10 @@ async function start(session){
   const mem = await sb.from("members").select("role").eq("user_id", user.id).maybeSingle();
   if (mem.error || !mem.data){ show("#noAccess"); return; }
   isAdmin = mem.data.role === "admin";
+  // A partner who only looks (read_only_members, see db/README.md): the database refuses his writes anyway,
+  // so the board says it up front, locks the fields and hides what would only fail.
+  const acc = await sb.rpc("my_access"); readOnly = !acc.error && acc.data === "viewer";
+  document.body.classList.toggle("ro", readOnly); $("#roBadge").classList.toggle("hidden", !readOnly);
   show("#mainView"); $("#whoami").textContent = user.email; $("#importLabel").classList.toggle("hidden", !isAdmin);
   setSync("saving", "טוען…");
   const [cfg, leads, calls] = await Promise.all([
@@ -563,6 +579,7 @@ function logEditHtml(l){
     <div class="inline"><button type="button" class="btn sm" id="logNew">רישום חדש (לשיחה בלי הקשבה)</button>${draftLeft(r) ? `<button type="button" class="btn sm" id="logDraftSave">שמור את הטיוטה הישנה כרישום</button>` : ""}${sv(l, "logSaved")}</div>`;
 }
 function newLog(l, fromDraft){
+  if (readOnly) return;
   const r = rec(l.id), base = fromDraft ? {...logDefaults(l), ...(r.logDraft || {})} : logDefaults(l);
   const entry = {id: Date.now().toString(36), at: new Date().toISOString(), by: user.email, status: r.status,
     ...Object.fromEntries(Object.entries(base).map(([k, v]) => [k, String(v ?? "").trim()]).filter(([, v]) => v))};
@@ -819,6 +836,7 @@ $("#detail").addEventListener("input", e => {
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
 function liveMsg(text){ const m = $("#liveMsg"); if (!m) return; m.textContent = text || ""; m.classList.toggle("hidden", !text); }
 function startCall(listen){
+  if (readOnly) return;                       // a viewer does not record or log calls
   if (call) endCall();                        // a call left open on another lead is closed and saved first
   const now = Date.now();
   call = {id: selId, start: now, objections: new Set(), trId: selId + "__" + now, listened: false, facts: {}, objAt: {}, heard: [], cursor: 0, itUsed: 0, endAt: 0,
@@ -1129,6 +1147,7 @@ async function accurateTranscript(c, blob){
 }
 // An older recording: the transcriber fetches it itself through a signed link to the private bucket.
 async function transcribeOnMac(id, path, btn){
+  if (readOnly) return;
   const r = rec(id), x = (r.calls || []).find(x => x.audio && x.audio.path === path); if (!x) return;
   btn.disabled = true; btn.textContent = "בודק את המתמלל…";
   if (!(await sttAlive())){ btn.disabled = false; btn.textContent = "תמלל במק"; setStt(id, {state: "off"}); return; }
@@ -1430,6 +1449,7 @@ function renderSuggest(){
     + (ch && ch.msg ? `<div class="msg">${esc(ch.msg)}</div>` : "");
 }
 async function transcribeRecording(id, btn){
+  if (readOnly) return;
   const path = btn.dataset.stt, a = audioMeta(rec(id), path);
   btn.disabled = true; btn.textContent = "מתמלל…";
   const res = await callFn("transcribe", {path, at: a.at, dur: a.dur}, 150000);
