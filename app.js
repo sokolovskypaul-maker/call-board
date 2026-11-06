@@ -447,9 +447,10 @@ function firstName(l){
   const w = shortName(l.name).replace(/\s*\(.*?\)/g, "").trim().split(/\s+/)[0] || "";
   return /^[א-ת]{2,}$/.test(w) && !BIZ_WORD.test(w) ? w : "";
 }
+// "&v=2" makes WhatsApp fetch the preview again: it remembers the preview of a link it has seen (the niche photos, 4.11).
 // No emoji in the message: WhatsApp on the Mac shows the one that came through a wa.me link as a question mark.
 function waMessage(l){
-  const p = WA_PAGES.find(([re]) => re.test(l.niche || "")), url = `${SITE}${p ? p[1] : ""}?utm_source=whatsapp&utm_medium=followup`, name = firstName(l);
+  const p = WA_PAGES.find(([re]) => re.test(l.niche || "")), url = `${SITE}${p ? p[1] : ""}?utm_source=whatsapp&utm_medium=followup&v=2`, name = firstName(l);
   return `היי${name ? " " + name : ""}, כאן פול מהמשרד האחורי.\nבהמשך לשיחה שלנו, היה נעים להכיר!\nכאן אפשר לראות איך זה עובד${p ? ` אצל ${p[2]}` : ""}:\n${url}\nאם יש שאלה, אני כאן. פול`;
 }
 const noEmoji = s => String(s).replace(/[\p{Extended_Pictographic}\p{Emoji_Modifier}\p{Regional_Indicator}]|[\u200D\uFE0F\u20E3]/gu, "").replace(/[ \t]+$/gm, "").replace(/ {2,}/g, " ");
