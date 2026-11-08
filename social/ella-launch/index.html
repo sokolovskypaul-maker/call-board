@@ -1,0 +1,294 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<title>אלה · ריל השקה</title>
+<!-- Launch-film reel for Ella, 1080x1920, 21s. Every frame is a pure function of time (render(t)), so render.cjs can
+     step through it frame by frame. One <link> per family, so a family Google lacks cannot take the others down. -->
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Rubik:wght@900&display=block">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Secular+One&display=block">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Frank+Ruhl+Libre:wght@900&display=block">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Karantina:wght@700&display=block">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Amatic+SC:wght@700&display=block">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Suez+One&display=block">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Heebo:wght@100;200;300;400;900&display=block">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=David+Libre:wght@700&display=block">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Varela+Round&display=block">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Hebrew:wght@700&display=block">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+Hebrew:wght@900&display=block">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bellefair&display=block">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@700&display=block">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Assistant:wght@800&display=block">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Miriam+Libre:wght@700&display=block">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playpen+Sans+Hebrew:wght@800&display=block">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bona+Nova:wght@700&display=block">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Rubik+Scribble&display=block">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Alef:wght@700&display=block">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Tinos:wght@700&display=block">
+<style>
+:root{--ink:#14102E;--ink-soft:#5B5675;--cream:#FFF6E5;--violet:#6B4DF5;--teal:#2FE0C8;--pink:#FF5C9E;--yellow:#FFD23F;--red:#FF4A3D;--sky:#8FD3FF}
+html,body{margin:0;background:#000}
+#stage{position:relative;width:1080px;height:1920px;overflow:hidden;background:var(--ink)}
+.shot{position:absolute;inset:0;display:none}
+.shot.on{display:block}
+/* the text sits a little above centre: the bottom of a reel is under Instagram's caption and buttons */
+.cam{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding-bottom:200px;transform-origin:50% 44%}
+.word{white-space:pre;line-height:1.08;text-align:center}
+.word span{display:inline-block;white-space:pre}
+.ui{font-family:"Heebo",sans-serif}
+#grain{position:absolute;inset:-160px;pointer-events:none;opacity:.13;mix-blend-mode:overlay;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='320' height='320'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>")}
+#vignette{position:absolute;inset:0;pointer-events:none;background:radial-gradient(ellipse at 50% 44%,transparent 55%,rgba(0,0,0,.26) 100%)}
+#flash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none}
+
+/* waveform: Ella's voice */
+.wave{display:flex;align-items:center;justify-content:center;gap:12px;height:220px}
+.wave i{display:block;width:16px;border-radius:8px;background:var(--teal)}
+
+/* missed calls */
+.phoneicon{position:relative;width:360px;height:360px;border-radius:50%;background:#221C4A;display:flex;align-items:center;justify-content:center}
+.phoneicon svg{width:190px;height:190px;fill:var(--cream)}
+.badge{position:absolute;top:6px;left:6px;min-width:130px;height:130px;border-radius:65px;background:var(--red);color:#fff;
+  font:900 92px/130px "Heebo",sans-serif;text-align:center;box-shadow:0 0 0 14px var(--ink)}
+
+/* speech bubbles */
+.chat{width:900px;display:flex;flex-direction:column;gap:46px}
+.who{font:300 40px "Heebo",sans-serif;color:var(--ink-soft);margin-bottom:12px}
+.bubble{font:400 58px/1.3 "Heebo",sans-serif;padding:36px 44px;border-radius:48px;max-width:760px}
+.bubble.them{align-self:flex-start;background:#fff;color:var(--ink);border-bottom-right-radius:12px;box-shadow:0 10px 0 rgba(20,16,46,.08)}
+.bubble.ella{align-self:flex-end;background:var(--violet);color:var(--cream);border-bottom-left-radius:12px;font-weight:900}
+.side-r{align-self:flex-start}.side-l{align-self:flex-end;text-align:left}
+.stamp{position:absolute;font:900 86px "Heebo",sans-serif;color:var(--ink);background:var(--yellow);padding:6px 40px 14px;border-radius:24px;border:8px solid var(--ink)}
+
+/* the lead card */
+.card{width:860px;background:var(--cream);border-radius:48px;padding:56px 60px;box-sizing:border-box;color:var(--ink)}
+.card h3{margin:0 0 34px;font:900 64px "Heebo",sans-serif;display:flex;align-items:center;gap:22px}
+.card h3 b{width:28px;height:28px;border-radius:50%;background:var(--violet);display:inline-block}
+.row{display:flex;align-items:center;gap:26px;padding:26px 0;border-top:3px solid rgba(20,16,46,.1)}
+.row .k{font:300 44px "Heebo",sans-serif;color:var(--ink-soft);width:220px}
+.row .v{font:900 54px "Heebo",sans-serif;flex:1}
+.row .ok{width:64px;height:64px;border-radius:50%;background:var(--teal);color:var(--ink);font:900 40px/64px "Heebo",sans-serif;text-align:center}
+
+/* the owner's phone */
+.phone{position:relative;width:600px;height:1060px;border-radius:84px;background:#0B0920;border:14px solid #2A2350;box-sizing:border-box;overflow:hidden;margin-top:40px}
+.phone .clock{position:absolute;top:150px;width:100%;text-align:center;font:200 150px "Heebo",sans-serif;color:var(--cream);direction:ltr}
+.phone .date{position:absolute;top:330px;width:100%;text-align:center;font:300 40px "Heebo",sans-serif;color:#AEB0D0}
+.note{position:absolute;top:470px;left:28px;right:28px;background:rgba(255,246,229,.97);border-radius:40px;padding:30px 32px;display:flex;gap:24px;align-items:flex-start;color:var(--ink)}
+.note .app{flex:none;width:92px;height:92px;border-radius:24px;background:var(--teal);display:flex;align-items:center;justify-content:center;gap:5px}
+.note .app i{display:block;width:8px;border-radius:4px;background:var(--ink)}
+.note .t1{font:900 40px "Heebo",sans-serif}.note .t1 small{font-weight:300;color:var(--ink-soft);margin-right:10px}
+.note .t2{font:400 38px/1.35 "Heebo",sans-serif;margin-top:6px}
+</style>
+</head>
+<body>
+<div id="stage"><div id="shots"></div><div id="vignette"></div><div id="grain"></div><div id="flash"></div></div>
+<script>
+const C = {ink:"#14102E", cream:"#FFF6E5", violet:"#6B4DF5", teal:"#2FE0C8", pink:"#FF5C9E", yellow:"#FFD23F", red:"#FF4A3D", sky:"#8FD3FF"};
+const BEAT = 0.5;   // 120 BPM: every cut lands on a beat, so any 120 BPM track lines up with it
+// b: length in beats. A word shot gets its own font (the launch-film move: every word in a different face).
+const SHOTS = [
+  {b:1, text:"הטלפון",          font:"Rubik", w:900,               bg:C.ink,    fg:C.cream, anim:"pop"},
+  {b:1, text:"מצלצל",           font:"Secular One", w:400,         bg:C.yellow, fg:C.ink,   anim:"shake"},
+  {b:1, text:"ואתה",            font:"Frank Ruhl Libre", w:900,    bg:C.cream,  fg:C.ink,   anim:"blurIn"},
+  {b:1, text:"מתחת לכיור",      font:"Karantina", w:700, size:420, bg:C.teal,   fg:C.ink,   anim:"slide"},
+  {b:1, text:"על הסולם",        font:"Amatic SC", w:700, size:400, bg:C.pink,   fg:C.cream, anim:"drop"},
+  {b:1, text:"בנסיעה",          font:"Suez One", w:400,            bg:C.violet, fg:C.cream, anim:"stretch"},
+  {b:1, text:"עם לקוח",         font:"Heebo", w:100,               bg:C.cream,  fg:C.ink,   anim:"mask"},
+  {b:2, kind:"missed",                                              bg:C.ink},
+  {b:1, text:"הלקוח",           font:"David Libre", w:700,         bg:C.cream,  fg:C.ink,   anim:"pop"},
+  {b:1, text:"לא מחכה.",        font:"Varela Round", w:400,        bg:C.ink,    fg:C.yellow,anim:"type"},
+  {b:1, text:"מתקשר",           font:"IBM Plex Sans Hebrew", w:700,bg:C.sky,    fg:C.ink,   anim:"slide"},
+  {b:2, text:"למתחרה.",         font:"Noto Serif Hebrew", w:900,   bg:C.red,    fg:C.cream, anim:"zoom", flash:.55},
+  {b:1, text:"תכירו",           font:"Bellefair", w:400,           bg:C.ink,    fg:C.cream, anim:"blurIn"},
+  {b:3, kind:"hero",                                                bg:C.ink, flash:.9},
+  {b:1, text:"עונה",            font:"Fredoka", w:700,             bg:C.teal,   fg:C.ink,   anim:"pop"},
+  {b:1, text:"לטלפון של העסק",  font:"Assistant", w:800,           bg:C.cream,  fg:C.ink,   anim:"mask"},
+  {b:1, text:"כשאתה לא יכול.",  font:"Miriam Libre", w:700,        bg:C.violet, fg:C.cream, anim:"slide"},
+  {b:1, text:"מקשיבה",          font:"Playpen Sans Hebrew", w:800, bg:C.ink,    fg:C.teal,  anim:"pop", wave:true},
+  {b:1, text:"מבינה",           font:"Bona Nova", w:700,           bg:C.yellow, fg:C.ink,   anim:"blurIn"},
+  {b:3, kind:"chat",                                                bg:C.cream},
+  {b:1, text:"רושמת",           font:"Rubik Scribble", w:400,      bg:C.pink,   fg:C.ink,   anim:"type"},
+  {b:2, kind:"form",                                                bg:C.ink},
+  {b:1, text:"והפרטים",         font:"Alef", w:700,                bg:C.cream,  fg:C.ink,   anim:"slide"},
+  {b:2, kind:"notify",                                              bg:C.violet},
+  {b:1, text:"אף שיחה",         font:"Heebo", w:900,               bg:C.ink,    fg:C.cream, anim:"pop"},
+  {b:1, text:"לא נשארת",        font:"Tinos", w:700,               bg:C.yellow, fg:C.ink,   anim:"slide"},
+  {b:1, text:"בלי מענה.",       font:"Rubik", w:900,               bg:C.pink,   fg:C.ink,   anim:"shake"},
+  {b:4, kind:"end",                                                 bg:C.ink},
+  {b:3, kind:"cta",                                                 bg:C.yellow},
+];
+let t0 = 0; for (const s of SHOTS){ s.t = t0; s.d = s.b * BEAT; t0 += s.d; }
+const TOTAL = t0;
+
+const clamp = x => Math.min(1, Math.max(0, x));
+const eo  = x => 1 - Math.pow(1 - clamp(x), 3);
+const eo5 = x => 1 - Math.pow(1 - clamp(x), 5);
+const back = x => { x = clamp(x); const c1 = 1.9, c3 = c1 + 1; return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2); };
+const fadeIn = (lt, at, len = .12) => clamp((lt - at) / len);
+const h = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; };
+const spans = text => [...text].map(ch => `<span>${ch}</span>`).join("");
+const PHONE_SVG = '<svg viewBox="0 0 24 24"><path d="M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z"/></svg>';
+
+function wave(n, height, color){ const w = h("div", "wave"); w.style.height = height + "px"; for (let i = 0; i < n; i++){ const b = h("i"); if (color) b.style.background = color; w.appendChild(b); } return w; }
+function animWave(w, t, max){ [...w.children].forEach((b, i) => {
+  const a = Math.abs(Math.sin(t * 7.3 + i * .55)) * .6 + Math.abs(Math.sin(t * 3.1 + i * 1.7)) * .4;
+  const env = Math.sin(Math.PI * (i + .5) / w.children.length);   // taller in the middle
+  b.style.height = Math.max(14, max * a * (.35 + .65 * env)) + "px"; }); }
+
+// ── build: one DOM per shot, shown one at a time ──
+function build(){
+  const root = document.getElementById("shots");
+  for (const s of SHOTS){
+    const el = h("div", "shot"); el.style.background = s.bg; const cam = h("div", "cam"); el.appendChild(cam); root.appendChild(el);
+    s.el = el; s.cam = cam;
+    if (s.text != null){
+      const word = h("div", "word", spans(s.text));
+      word.style.fontFamily = `"${s.font}"`; word.style.fontWeight = s.w; word.style.color = s.fg; word.style.fontSize = (s.size || 330) + "px";
+      cam.appendChild(word); s.word = word;
+      if (s.wave){ s.waveEl = wave(26, 200, C.teal); s.waveEl.style.marginTop = "40px"; cam.appendChild(s.waveEl); }
+      // shrink to one line of at most 920px
+      el.classList.add("on"); const wd = word.getBoundingClientRect().width;
+      if (wd > 920) word.style.fontSize = ((s.size || 330) * 920 / wd) + "px";
+      el.classList.remove("on");
+    } else BUILD[s.kind](s);
+  }
+}
+const BUILD = {
+  missed(s){
+    const ic = h("div", "phoneicon", PHONE_SVG); const badge = h("div", "badge", "1"); ic.appendChild(badge);
+    const label = h("div", "ui", "שיחות שלא נענו"); label.style.cssText = "font:900 110px Heebo;color:#FFF6E5;margin-top:70px";
+    const today = h("div", "ui", "היום"); today.style.cssText = "font:300 56px Heebo;color:#2FE0C8;margin-bottom:40px";
+    s.cam.append(today, ic, label); Object.assign(s, {ic, badge, label, today});
+  },
+  hero(s){
+    s.el.style.background = "radial-gradient(circle at 50% 40%, #3D2BA6 0%, #14102E 68%)";
+    const name = h("div", "word", "אלה."); name.style.cssText = 'font:900 440px/1 "Rubik";color:#FFF6E5;text-shadow:0 0 90px rgba(47,224,200,.55)';
+    const w = wave(30, 220); const tag = h("div", "ui", "העוזרת הקולית של העסק"); tag.style.cssText = "font:300 66px Heebo;color:#2FE0C8;margin-top:36px";
+    s.cam.append(name, w, tag); Object.assign(s, {name, w, tag});
+  },
+  chat(s){
+    const chat = h("div", "chat");
+    const who1 = h("div", "who side-r", "שלמה, לקוח"); const b1 = h("div", "bubble them");
+    s.words1 = "יש לי מים שיוצאים מאיפשהו מאחורי האסלה, אין לי מושג מה זה".split(" ");
+    const who2 = h("div", "who side-l", "אלה"); const b2 = h("div", "bubble ella", "הבנתי. הניאגרה דולפת. רושמת לך פנייה.");
+    const g1 = h("div"); g1.style.cssText = "display:flex;flex-direction:column"; g1.append(who1, b1);
+    const g2 = h("div"); g2.style.cssText = "display:flex;flex-direction:column"; g2.append(who2, b2);
+    chat.append(g1, g2); const stamp = h("div", "stamp", "פוענח ✓");
+    s.cam.append(chat); s.el.appendChild(stamp); Object.assign(s, {b1, g2, stamp});
+    stamp.style.left = "110px"; stamp.style.top = "1300px";
+  },
+  form(s){
+    const card = h("div", "card"); card.appendChild(h("h3", "", "<b></b>פנייה חדשה"));
+    s.rows = [["שם", "שלמה"], ["מה קרה", "ניאגרה דולפת"], ["מתי נוח", "היום אחרי 16:00"]].map(([k, v]) => {
+      const r = h("div", "row", `<div class="k">${k}</div><div class="v">${v}</div><div class="ok">✓</div>`); card.appendChild(r); return r; });
+    const by = h("div", "ui", "נרשם על ידי אלה"); by.style.cssText = "font:300 48px Heebo;color:#AEB0D0;margin-top:44px";
+    s.cam.append(card, by); Object.assign(s, {card, by});
+  },
+  notify(s){
+    const cap = h("div", "word", "אצלך."); cap.style.cssText = 'font:400 230px/1 "Suez One";color:#FFF6E5';
+    const ph = h("div", "phone", '<div class="clock">16:02</div><div class="date">יום שלישי</div>');
+    const note = h("div", "note"); const app = h("div", "app"); for (let i = 0; i < 5; i++) app.appendChild(h("i"));
+    note.append(app, h("div", "", '<div class="t1">אלה<small>עכשיו</small></div><div class="t2">פנייה חדשה: שלמה, ניאגרה דולפת. מחכה שתחזור אליו היום.</div>'));
+    ph.appendChild(note); s.cam.append(cap, ph); Object.assign(s, {cap, ph, note, app});
+  },
+  end(s){
+    s.el.style.background = "radial-gradient(circle at 50% 42%, #2A1F78 0%, #14102E 66%)";
+    const name = h("div", "word", "אלה"); name.style.cssText = 'font:900 420px/1 "Rubik";color:#FFF6E5';
+    const w = wave(22, 150); const tag = h("div", "ui", "העוזרת הקולית של העסק"); tag.style.cssText = "font:300 72px Heebo;color:#FFF6E5;margin-top:30px";
+    const sub = h("div", "ui", "עונה כשאתה לא יכול"); sub.style.cssText = "font:900 60px Heebo;color:#2FE0C8;margin-top:22px";
+    s.cam.append(name, w, tag, sub); Object.assign(s, {name, w, tag, sub});
+  },
+  cta(s){
+    const q = h("div", "word", "רוצים לשמוע אותה?"); q.style.cssText = 'font:400 108px/1.1 "Secular One";color:#14102E';
+    const pill = h("div", "ui", "הקישור בביו"); pill.style.cssText = "font:900 92px Heebo;color:#FFF6E5;background:#14102E;padding:18px 70px 30px;border-radius:80px;margin-top:60px";
+    const by = h("div", "ui", "מבית המשרד האחורי"); by.style.cssText = "font:300 54px Heebo;color:#14102E;margin-top:70px";
+    s.cam.append(q, pill, by); Object.assign(s, {q, pill, by});
+  },
+};
+
+// ── word animations: lt = seconds into the shot ──
+const ANIM = {
+  pop(e, lt){ e.style.transform = `scale(${1.16 - .16 * eo(lt / .2)})`; e.style.opacity = clamp(lt / .05); },
+  shake(e, lt){ const d = Math.exp(-lt * 5.5); e.style.transform = `translateX(${Math.sin(lt * 53) * 18 * d}px) rotate(${Math.sin(lt * 70) * 4.5 * d}deg) scale(${1.08 - .08 * eo(lt / .15)})`; e.style.opacity = 1; },
+  blurIn(e, lt){ const k = eo(lt / .26); e.style.filter = `blur(${(1 - k) * 26}px)`; e.style.transform = `scale(${.9 + .1 * k})`; e.style.opacity = k; },
+  slide(e, lt){ const k = eo5(lt / .3); e.style.transform = `translateY(${(1 - k) * 160}px)`; e.style.opacity = clamp(lt / .08); },
+  drop(e, lt){ const k = back(lt / .34); e.style.transform = `translateY(${(1 - k) * -300}px)`; e.style.opacity = clamp(lt / .06); },
+  stretch(e, lt){ const k = eo5(lt / .32); e.style.transform = `translateX(${(1 - k) * -220}px) scaleX(${1.8 - .8 * k})`; e.style.opacity = clamp(lt / .05); },
+  mask(e, lt){ const k = eo(lt / .32); e.style.clipPath = `inset(-20% 0 -20% ${(1 - k) * 100}%)`; },      // reveals from the right, the way Hebrew reads
+  type(e, lt, d){ const sp = e.children, n = Math.ceil(clamp(lt / (d * .55)) * sp.length); [...sp].forEach((c, i) => c.style.opacity = i < n ? 1 : 0); },
+  zoom(e, lt){ const d = Math.exp(-lt * 8); e.style.transform = `translateX(${Math.sin(lt * 61) * 12 * d}px) scale(${1.22 - .22 * eo(lt / .22) + .05 * lt})`; },
+};
+
+const DRAW = {
+  missed(s, lt){
+    const n = 1 + Math.floor(clamp((lt - .1) / .75) * 6), stepAt = .1 + (n - 1) * .75 / 6;
+    s.badge.textContent = n; s.badge.style.transform = `scale(${1 + .3 * Math.exp(-(lt - stepAt) * 14)})`;
+    s.ic.style.transform = `rotate(${Math.sin(lt * 46) * 7 * Math.max(0, 1 - lt / .7)}deg) scale(${.85 + .15 * eo(lt / .2)})`;
+    s.label.style.opacity = fadeIn(lt, .15); s.label.style.transform = `translateY(${(1 - eo5((lt - .15) / .3)) * 60}px)`;
+    s.today.style.opacity = fadeIn(lt, .05);
+  },
+  hero(s, lt){
+    const k = eo5(lt / .55); s.name.style.transform = `scale(${1.35 - .35 * k})`; s.name.style.opacity = clamp(lt / .08);
+    s.name.style.letterSpacing = `${(1 - k) * 60}px`;
+    animWave(s.w, lt, 200); s.w.style.opacity = fadeIn(lt, .3, .2);
+    s.tag.style.opacity = fadeIn(lt, .7, .2); s.tag.style.transform = `translateY(${(1 - eo5((lt - .7) / .35)) * 40}px)`;
+  },
+  chat(s, lt){
+    const n = Math.ceil(clamp((lt - .05) / .5) * s.words1.length); s.b1.textContent = s.words1.slice(0, Math.max(1, n)).join(" ");
+    s.b1.parentNode.style.opacity = clamp(lt / .06);
+    const k = back((lt - .62) / .3); s.g2.style.opacity = lt > .62 ? 1 : 0; s.g2.style.transform = `translateY(${(1 - k) * 80}px) scale(${.92 + .08 * clamp(k)})`;
+    const ks = eo5((lt - 1.0) / .2); s.stamp.style.opacity = lt > 1.0 ? 1 : 0; s.stamp.style.transform = `rotate(-8deg) scale(${2.2 - 1.2 * ks})`;
+  },
+  form(s, lt){
+    s.card.style.transform = `translateY(${(1 - eo5(lt / .3)) * 200}px)`; s.card.style.opacity = clamp(lt / .08);
+    s.rows.forEach((r, i) => { const a = .12 + i * .2; r.style.opacity = fadeIn(lt, a, .1);
+      r.querySelector(".ok").style.transform = `scale(${lt < a + .08 ? 0 : 1 + .4 * Math.exp(-(lt - a - .08) * 16)})`; });
+    s.by.style.opacity = fadeIn(lt, .75, .15);
+  },
+  notify(s, lt){
+    s.cap.style.transform = `scale(${1.12 - .12 * eo(lt / .2)})`; s.cap.style.opacity = clamp(lt / .05);
+    s.ph.style.transform = `translateY(${(1 - eo5(lt / .35)) * 260}px)`;
+    const k = back((lt - .3) / .32); s.note.style.transform = `translateY(${(1 - k) * -420}px)`; s.note.style.opacity = lt > .3 ? 1 : 0;
+    [...s.app.children].forEach((b, i) => b.style.height = (14 + 34 * Math.abs(Math.sin(lt * 9 + i))) + "px");
+  },
+  end(s, lt){
+    s.name.style.transform = `scale(${1.1 - .1 * eo5(lt / .5)})`; s.name.style.opacity = clamp(lt / .2);
+    animWave(s.w, lt, 130); s.w.style.opacity = fadeIn(lt, .25, .2);
+    s.tag.style.opacity = fadeIn(lt, .45, .25); s.sub.style.opacity = fadeIn(lt, .9, .25);
+  },
+  cta(s, lt){
+    s.q.style.transform = `translateY(${(1 - eo5(lt / .3)) * 120}px)`; s.q.style.opacity = clamp(lt / .08);
+    const k = back((lt - .3) / .3); s.pill.style.transform = `scale(${lt > .3 ? k : 0})`;
+    s.by.style.opacity = fadeIn(lt, .7, .2);
+  },
+};
+
+// ── render(t): the whole frame at time t ──
+let current = null;
+function render(t){
+  t = Math.min(t, TOTAL - 1e-6);
+  const s = SHOTS.find(x => t >= x.t && t < x.t + x.d) || SHOTS[SHOTS.length - 1], lt = t - s.t;
+  if (current !== s){ if (current) current.el.classList.remove("on"); s.el.classList.add("on"); current = s; }
+  s.cam.style.transform = `scale(${1 + .035 * (lt / s.d)})`;                 // a slow push on every shot
+  if (s.word){ ANIM[s.anim](s.word, lt, s.d); if (s.waveEl) animWave(s.waveEl, lt, 190); }
+  else DRAW[s.kind](s, lt);
+  document.getElementById("flash").style.opacity = s.flash ? s.flash * (1 - clamp(lt / .14)) : 0;
+  // film grain that moves every frame
+  const f = Math.floor(t * 30), rx = ((f * 73) % 150) - 75, ry = ((f * 131) % 150) - 75;
+  document.getElementById("grain").style.transform = `translate(${rx}px, ${ry}px)`;
+}
+
+const FAMILIES = [...new Set(SHOTS.filter(s => s.font).map(s => `${s.w} 100px "${s.font}"`).concat(['100 100px "Heebo"', '200 100px "Heebo"', '300 100px "Heebo"', '400 100px "Heebo"', '900 100px "Heebo"', '400 100px "Suez One"', '400 100px "Secular One"', '900 100px "Rubik"']))];
+window.ready = (async () => {
+  await Promise.all(FAMILIES.map(f => document.fonts.load(f, "אבגדהוזחטיכלמנסעפצקרשתךםןףץ 0123456789.?✓")));
+  await document.fonts.ready;
+  const loaded = new Set([...document.fonts].filter(f => f.status === "loaded").map(f => f.family.replace(/["']/g, "")));
+  const missing = [...new Set(SHOTS.filter(s => s.font).map(s => s.font))].filter(f => !loaded.has(f));
+  build(); render(0);
+  return {duration: TOTAL, shots: SHOTS.length, missing};
+})();
+window.render = render;
+</script>
+</body>
+</html>
