@@ -60,9 +60,11 @@ header.top{padding-block:10px 12px;gap:12px;border-bottom:0}
 .app[data-screen="home"] .stats-more{display:none}
 .stats{gap:0;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:3px;box-shadow:var(--sh1)}
 .stat{border:0;background:none;border-radius:0;padding:4px 14px;min-width:0;border-inline-start:1px solid var(--line)}
-.stats.all .stat:first-child,.stats:not(.all) .stat.kfirst{border-inline-start:0}
-.stats:not(.all) .stat:not(.key){display:none}
-.stats.all{flex-wrap:wrap;max-width:min(760px,100%)}
+/* רק בשורת המספרים שבראש העמוד (#stats). ביומן השיחות יש שורה משלה (.dstats), ובה מוצגים כל המספרים */
+#stats.all .stat:first-child,#stats:not(.all) .stat.kfirst,.dstats .stat:first-child{border-inline-start:0}
+#stats:not(.all) .stat:not(.key){display:none}
+#stats.all{flex-wrap:wrap;max-width:min(760px,100%)}
+.dstats{flex-wrap:wrap;width:fit-content;max-width:100%}
 .stat span{font-size:11.5px;font-weight:600;color:var(--muted);white-space:nowrap}
 .stat b{font:650 19px/1.25 var(--f-body);font-variant-numeric:tabular-nums;display:inline}
 .stat .sub2{font-size:11.5px;color:var(--muted);margin-inline-start:6px;white-space:nowrap}
@@ -233,6 +235,9 @@ details.more,details.script{border-radius:14px;border-color:var(--line)}
   .stats.all{grid-template-columns:repeat(3,minmax(0,1fr))}
   .stat{padding:4px 8px}
   .stats.all .stat:nth-child(3n+1){border-inline-start:0}
+  .dstats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));width:auto}
+  .dstats .stat:nth-child(3n+1){border-inline-start:0}
+  .dstats .stat span{white-space:normal}
   .stats-more{display:none!important}
   #stats{position:relative;cursor:pointer}
   #stats::after{content:"";position:absolute;left:12px;top:50%;width:7px;height:7px;border-inline-start:1.6px solid var(--muted);border-bottom:1.6px solid var(--muted);transform:translateY(-75%) rotate(45deg);transition:transform .25s var(--ease)}
