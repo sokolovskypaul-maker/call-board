@@ -410,13 +410,13 @@ function liveHtml(l){
     <div class="msg hidden" id="liveMsg"></div></section>`;
   const keys = scriptKeys(l);
   return `<section class="callbar on" id="callbar">
-    <div class="inline callhead"><button type="button" class="btn rec" id="callEnd">⏹ סיים שיחה</button><span class="calltime" id="callTime">${fmt(Date.now() - call.start)}</span>
+    <div class="cocktop" id="cockTop"><div class="inline callhead"><button type="button" class="btn rec" id="callEnd">⏹ סיים שיחה</button><span class="calltime" id="callTime">${fmt(Date.now() - call.start)}</span>
       <span class="mic ${listening ? "on" : ""}" id="mic"><span class="dot"></span>${listening ? "מקשיב" : "לא מקשיב"}</span>
       <span class="recbadge ${call.recording ? "on" : ""}" id="recBadge">${recBadgeText()}</span>
       <button type="button" class="linkbtn" id="listenToggle">${listening ? "השהה הקשבה" : "🎙 הקשב"}</button>
       ${keys.length > 1 ? `<select id="scriptPick" aria-label="התסריט שהשיחה עוקבת אחריו">${keys.map(k => `<option value="${k}" ${k === scriptPick(l) ? "selected" : ""}>${esc(scriptName(k, l))}</option>`).join("")}</select>` : ""}</div>
     <div class="endbanner" id="endBanner" role="status" hidden></div>
-    <div class="say" id="sayBox" aria-live="polite"></div>
+    <div class="say" id="sayBox" aria-live="polite"></div></div>
     <div class="heardfacts" id="heardFacts" hidden></div>
     <nav class="steps" id="stepNav" aria-label="חלקי התסריט"></nav>
     <div class="steppane" id="stepPane"></div>
@@ -545,7 +545,7 @@ function renderDetail(){
       ${l.fit ? `<div class="fit"><b>למה מתאים לאלה:</b> ${esc(l.fit)}</div>` : ""}
       ${facts ? `<div class="facts">${facts}</div>` : ""}
       ${historyHtml(l)}${scripts}`}`;
-  renderTranscript(); renderCockpit(); renderSuggest(); renderEndBanner();
+  renderTranscript(); renderCockpit(); renderSuggest(); renderEndBanner(); renderTip(false);
 }
 // ---------- post-call log: Ofek's six-line template (round 7) ----------
 // Each call is its own dated entry in rec.logs, so a new one never overwrites an earlier one. Since 27.10 the board writes
@@ -1041,6 +1041,7 @@ function renderTip(fresh){
     el.addEventListener("click", e => { if (!e.target.closest("#tipClose")) return; if (call) call.tip = null; el.hidden = true; });
     document.body.appendChild(el);
   }
+  { const top = $("#cockTop"); if (top && el.previousElementSibling !== top) top.after(el); }   // the tip sits in the card, under what to say now
   const l = DATA.find(x => x.id === c.id);
   el.innerHTML = `<div class="tip-h"><span>💡 אפשר להגיד${t.kw ? ` · שמעתי "${esc(t.kw)}"` : ""}</span><button type="button" class="tip-x" id="tipClose" aria-label="סגירת ההצעה">×</button></div>
     <div class="tip-say">${esc(fillIn(t.say, l))}</div>${t.then ? `<div class="tip-then">ואז: ${esc(fillIn(t.then, l))}</div>` : ""}`;
@@ -1276,7 +1277,7 @@ function startMeter(c, stream){
     ac.createMediaStreamSource(stream).connect(an); ac.resume().catch(() => {});
     const fb = new Float32Array(an.frequencyBinCount), hz = ac.sampleRate / an.fftSize, lo = Math.floor(300 / hz), hi = Math.ceil(2500 / hz);
     let run = 0;
-    c.meter = {ac, timer: setInterval(() => {
+    c.meter = {ac, an, timer: setInterval(() => {
       if (!live || ac.state !== "running") return; an.getFloatFrequencyData(fb);
       let tot = 0, mx = -Infinity, mi = lo;
       for (let i = lo; i <= hi; i++){ tot += 10 ** (fb[i] / 10); if (fb[i] > mx){ mx = fb[i]; mi = i; } }
