@@ -1,0 +1,5 @@
+out/
+__pycache__/
+*.mp4
+*.mov
+*.mkv
